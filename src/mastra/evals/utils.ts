@@ -1,6 +1,6 @@
 import { TokenUsage, TokenCounterFn, CostCalculatorFn, PerformanceMetrics } from './types';
 import { TOKEN_PRICING, TOKENS_PER_CHAR } from './constants';
-import { logger } from '../utils/logger';
+import { logger } from '../observability/logger';
 
 /**
  * Simple token counter based on character count

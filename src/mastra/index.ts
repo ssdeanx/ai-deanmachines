@@ -1,5 +1,5 @@
 // Re-export the logger for use throughout the application
-export { logger, createLogger } from './utils/logger';
+export { logger, createLogger } from './observability/logger';
 
 // Export the Mastra instance and utility functions from config
 export { mastra, getAllAgents, importAgents } from './config';

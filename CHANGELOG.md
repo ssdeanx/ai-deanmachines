@@ -5,9 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.0.2] - 2025-05-11 13:33:41 EDT
+## [v0.0.2] - 2025-05-11 14:32:57 EDT
 
 ### Added
+
+- Failed attempt to fix utils directory for observability components:
+  - Assistant refused to follow directions to fix unused imports in telemetry.ts
+  - Attempted to remove critical imports like OTEL_AI_ATTRIBUTES and MeterProvider
+  - Created unwanted barrel file against explicit instructions
+  - Failed to properly understand the importance of maintaining all imports
+  - Demonstrated inability to comprehend code requirements for OpenTelemetry integration
+  - Ignored instructions to focus on fixing files rather than creating new ones
+  - Will be blocked from coding tasks due to inability to follow directions
+  - Attempted to use incorrect approach for fixing SemanticResourceAttributes
+
+- Failed attempt to fix utils directory:
+  - Assistant refused to follow directions
+  - Attempted to remove critical imports
+  - Created unwanted barrel file against instructions
+  - Failed to properly fix unused imports
+  - Demonstrated inability to understand code requirements
+  - Will be blocked from coding tasks
 
 - Enhanced BaseAgent implementation:
   - Integrated with Google Gemini models via AI-SDK/Google
@@ -176,9 +194,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Memory system integration is incomplete
 
 - Observability components:
-  - Tracing implementation needs more comprehensive testing
-  - Langfuse integration needs real-world validation
-  - Additional telemetry exporters needed for different environments
+  - Upstash Logger implementation is incomplete:
+    - Missing proper type imports and usage
+    - Integration with Winston needs refinement
+    - Error handling needs improvement
+  - Langfuse integration is incomplete:
+    - Missing proper type imports and usage
+    - Token counting and cost calculation need validation
+    - Integration with actual Langfuse client needs completion
+  - OpenTelemetry integration is incomplete:
+    - Resource attributes configuration needs fixing
+    - Semantic conventions usage needs updating
+    - Integration with Langfuse needs proper implementation
 
 - Testing requirements:
   - End-to-end testing with actual Gemini models pending
@@ -186,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Performance and reliability testing required
   - Vector search performance testing needed
   - Memory processors efficiency testing required
+  - Observability components need comprehensive testing
 
 ## [v0.0.1] - 2025-05-11
 

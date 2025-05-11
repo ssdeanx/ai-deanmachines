@@ -1,6 +1,6 @@
 import { NumericEvalMetric, EvalParams, EvalResult } from '../types';
 import { DEFAULT_THRESHOLDS } from '../constants';
-import { logger } from '../../utils/logger';
+import { logger } from '../../observability/logger';
 
 /**
  * Answer Relevancy Metric

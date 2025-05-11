@@ -13,8 +13,8 @@ import {
   trackPerformance,
   generateRequestId
 } from './utils';
-import { logger } from '../utils/logger';
-import { getTracer } from '../utils/telemetry';
+import { logger } from '../observability/logger';
+import { getTracer } from '../observability/telemetry';
 
 // Create a tracer for the evals module
 const tracer = getTracer('mastra.evals');

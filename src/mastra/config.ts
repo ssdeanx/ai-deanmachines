@@ -1,7 +1,7 @@
 import { Mastra } from '@mastra/core';
-import { logger } from './utils/logger';
-import { createTelemetryConfig } from './utils/langfuse';
-import { initTelemetry } from './utils/telemetry';
+import { logger } from './observability/logger';
+import { createTelemetryConfig } from './observability/langfuse';
+import { initTelemetry } from './observability/telemetry';
 
 /**
  * Initialize and configure the Mastra instance

@@ -1,4 +1,23 @@
+/**
+ * Types for the observability module
+ *
+ * This file contains type definitions for the observability module,
+ * including telemetry, logging, and monitoring.
+ */
+
+// OpenTelemetry imports
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { Meter } from '@opentelemetry/api';
+
+// Winston imports
+import { TransportStreamOptions } from 'winston-transport';
+import { Logger } from 'winston';
+
+// Upstash imports
+import { Redis } from '@upstash/redis';
+
+// Langfuse imports
+import { LangfuseExporter } from 'langfuse-vercel';
 
 /**
  * Logger level type
@@ -12,6 +31,20 @@ export interface LoggerConfig {
   name: string;
   level?: LogLevel;
   format?: 'json' | 'pretty';
+  transports?: any[];
+}
+
+/**
+ * Upstash logger configuration options
+ */
+export interface UpstashLoggerConfig extends TransportStreamOptions {
+  url: string;
+  token: string;
+  prefix?: string;
+  batchSize?: number;
+  flushInterval?: number;
+  retentionPeriod?: number;
+  level?: LogLevel;
 }
 
 /**

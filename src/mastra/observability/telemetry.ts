@@ -8,11 +8,10 @@ import {
 } from '@opentelemetry/sdk-metrics';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { diag, DiagConsoleLogger, DiagLogLevel, metrics, Meter, trace } from '@opentelemetry/api';
 import { logger } from './logger';
 import { TelemetryConfig, TelemetrySDK } from './types';
-import { DEFAULT_TELEMETRY_CONFIG, OTEL_AI_ATTRIBUTES } from './constants';
-import { metrics, Meter } from '@opentelemetry/api';
+import { DEFAULT_TELEMETRY_CONFIG, OTEL_AI_ATTRIBUTES, SEMRESATTRS } from './constants';
 
 /**
  * Configure and initialize OpenTelemetry
@@ -35,21 +34,58 @@ export function initTelemetry(config: TelemetryConfig = {}): TelemetrySDK {
     return null;
   }
 
+  // Enable OpenTelemetry debugging if needed
+  if (process.env.OTEL_DEBUG === 'true') {
+    // We already imported these at the top of the file
+    diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
+  }
+
   logger.info(`Initializing OpenTelemetry for service: ${serviceName}`);
 
-  // Create a resource that identifies your service
-  const resource = new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
-    [SemanticResourceAttributes.SERVICE_VERSION]: serviceVersion,
-    [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: environment,
-  });
+  // Determine if we're in production
+  const isProduction = environment === 'production';
 
-  // Configure exporters
+  // Prepare Langfuse OTLP endpoint if credentials are available
+  const langfuseEnabled = !!(process.env.LANGFUSE_SECRET_KEY && process.env.LANGFUSE_PUBLIC_KEY);
+  const langfuseBaseUrl = process.env.LANGFUSE_BASEURL || 'https://cloud.langfuse.com';
+  const langfuseOtlpEndpoint = `${langfuseBaseUrl}/api/public/otel/v1/traces`;
+
+  // Create auth string for Langfuse if credentials are available
+  let langfuseAuthString: string | undefined;
+  if (langfuseEnabled) {
+    const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+    const secretKey = process.env.LANGFUSE_SECRET_KEY;
+    if (publicKey && secretKey) {
+      langfuseAuthString = Buffer.from(`${publicKey}:${secretKey}`).toString('base64');
+    }
+  }
+
+  // Create a resource that identifies your service
+  const resourceAttributes = {
+    [SEMRESATTRS.SERVICE_NAME]: serviceName || process.env.OTEL_SERVICE_NAME || 'mastra-app',
+    [SEMRESATTRS.SERVICE_VERSION]: serviceVersion || process.env.npm_package_version || '1.0.0',
+    [SEMRESATTRS.DEPLOYMENT_ENVIRONMENT]: environment || process.env.NODE_ENV || 'development',
+    'app.name': 'mastra-ai',
+    'app.component': 'agent-framework',
+  };
+
+  // Create the resource using the attributes
+  const resource = new Resource(resourceAttributes);
+
+  // Configure trace exporters
   const traceExporters = [];
 
-  // Always add console exporter for development visibility
-  if (environment === 'development') {
-    traceExporters.push(new ConsoleSpanExporter());
+  // Add Langfuse exporter if credentials are available
+  if (langfuseEnabled && langfuseAuthString) {
+    logger.info(`Adding Langfuse OTLP exporter with endpoint: ${langfuseOtlpEndpoint}`);
+    traceExporters.push(
+      new OTLPTraceExporter({
+        url: langfuseOtlpEndpoint,
+        headers: {
+          'Authorization': `Basic ${langfuseAuthString}`,
+        },
+      })
+    );
   }
 
   // Add OTLP exporter if endpoint is provided
@@ -63,38 +99,60 @@ export function initTelemetry(config: TelemetryConfig = {}): TelemetrySDK {
     );
   }
 
+  // Always add console exporter for development visibility
+  if (environment === 'development') {
+    traceExporters.push(new ConsoleSpanExporter());
+  }
+
   // Create and configure the OpenTelemetry SDK
   const sdk = new NodeSDK({
     resource,
-    traceExporter: traceExporters.length === 1 ? traceExporters[0] : traceExporters,
+    traceExporter: traceExporters.length > 0 ? traceExporters[0] : new ConsoleSpanExporter(),
     metricReader: new PeriodicExportingMetricReader({
       exporter: new ConsoleMetricExporter(),
+      // Export metrics every 15 seconds in production, 5 seconds in development
+      exportIntervalMillis: isProduction ? 15000 : 5000,
     }),
     instrumentations: [
       getNodeAutoInstrumentations({
-        // Add specific instrumentation configurations here
-        '@opentelemetry/instrumentation-http': {
-          enabled: true,
-        },
-        '@opentelemetry/instrumentation-express': {
-          enabled: true,
-        },
+        '@opentelemetry/instrumentation-http': { enabled: true },
+        '@opentelemetry/instrumentation-express': { enabled: true },
+        '@opentelemetry/instrumentation-fs': { enabled: true },
+        '@opentelemetry/instrumentation-dns': { enabled: true },
+        '@opentelemetry/instrumentation-graphql': { enabled: true },
+        '@opentelemetry/instrumentation-grpc': { enabled: true },
+        '@opentelemetry/instrumentation-redis': { enabled: true },
+        '@opentelemetry/instrumentation-pg': { enabled: true },
+        '@opentelemetry/instrumentation-mongodb': { enabled: true },
       }),
     ],
   });
 
   // Start the SDK
-  sdk.start()
-    .then(() => logger.info('OpenTelemetry SDK started successfully'))
-    .catch(error => logger.error(`Error starting OpenTelemetry SDK: ${error}`));
+  try {
+    sdk.start();
+    if (!isProduction) {
+      logger.info('OpenTelemetry SDK started successfully');
+      if (langfuseEnabled && langfuseAuthString) {
+        logger.info('Langfuse instrumentation configured');
+      }
+    }
+  } catch (error) {
+    logger.error(`Error starting OpenTelemetry SDK: ${error}`);
+  }
 
   // Handle process shutdown
   const shutdownHandler = () => {
     logger.info('Shutting down OpenTelemetry SDK');
     sdk.shutdown()
-      .then(() => logger.info('OpenTelemetry SDK shut down successfully'))
-      .catch(error => logger.error(`Error shutting down OpenTelemetry SDK: ${error}`))
-      .finally(() => process.exit(0));
+      .then(() => {
+        logger.info('OpenTelemetry SDK shut down successfully');
+        process.exit(0);
+      })
+      .catch(error => {
+        logger.error(`Error shutting down OpenTelemetry SDK: ${error}`);
+        process.exit(1);
+      });
   };
 
   process.on('SIGTERM', shutdownHandler);
@@ -110,7 +168,7 @@ export function initTelemetry(config: TelemetryConfig = {}): TelemetrySDK {
  * @returns A tracer instance for the specified module
  */
 export function getTracer(moduleName: string) {
-  const { trace } = require('@opentelemetry/api');
+  // Use the trace API imported at the top of the file
   return trace.getTracer(moduleName);
 }
 

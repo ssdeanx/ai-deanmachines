@@ -4,9 +4,9 @@ import { google } from '@ai-sdk/google';
 // Import types and constants
 import { AgentConfig, AgentConfigSchema } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../utils/logger';
+import { logger } from '../observability/logger';
 import { Memory } from '../memory';
-import { getTracer, recordLLMMetrics } from '../utils/telemetry';
+import { getTracer, recordLLMMetrics } from '../observability/telemetry';
 import { simpleTokenCounter, calculateCost } from '../evals/utils';
 
 /**
