@@ -35,6 +35,13 @@ export const WorkingMemoryConfigSchema = z.object({
 export type WorkingMemoryConfig = z.infer<typeof WorkingMemoryConfigSchema>;
 
 /**
+ * Memory processor interface
+ */
+export interface MemoryProcessor {
+  process(messages: Message[]): Message[];
+}
+
+/**
  * Memory configuration schema
  */
 export const MemoryConfigSchema = z.object({
@@ -44,6 +51,7 @@ export const MemoryConfigSchema = z.object({
   lastMessages: z.number().min(1).default(20),
   semanticRecall: SemanticRecallConfigSchema.optional(),
   workingMemory: WorkingMemoryConfigSchema.optional(),
+  processors: z.array(z.any()).optional(),
 });
 
 /**
@@ -58,6 +66,9 @@ export const UpstashMemoryConfigSchema = z.object({
   url: z.string(),
   token: z.string(),
   prefix: z.string().optional(),
+  vectorUrl: z.string().optional(),
+  vectorToken: z.string().optional(),
+  vectorIndex: z.string().optional(),
 });
 
 /**
@@ -93,10 +104,16 @@ export type MessageType = 'text' | 'tool-call' | 'tool-result';
 export interface Message {
   id: string;
   thread_id: string;
-  content: string;
+  content: string | Record<string, any>;
   role: MessageRole;
   type: MessageType;
+  name?: string;
+  timestamp?: string | Date;
   createdAt: Date;
+  _tokens?: number;
+  _filtered?: boolean;
+  _remove?: boolean;
+  [key: string]: any;
 }
 
 /**
@@ -116,4 +133,12 @@ export interface Storage {
   get(key: string): Promise<string | null>;
   lpush(key: string, value: string): Promise<boolean>;
   lrange(key: string, start: number, end: number): Promise<string[]>;
+}
+
+/**
+ * Memory processor interface
+ * Processors modify messages before they are sent to the LLM
+ */
+export interface MemoryProcessor {
+  process(messages: Message[]): Message[];
 }

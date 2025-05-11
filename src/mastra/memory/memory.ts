@@ -7,9 +7,12 @@ import {
   MessageRole,
   MessageType,
   SemanticRecallConfig,
-  WorkingMemoryConfig
+  WorkingMemoryConfig,
+  Message,
+  MemoryProcessor
 } from './types';
 import { logger } from '../index';
+import { ENV, DEFAULT_MEMORY } from '../constants';
 
 /**
  * Memory class for storing and retrieving conversation history
@@ -19,6 +22,7 @@ export class Memory {
   protected lastMessages: number;
   protected semanticRecall?: SemanticRecallConfig;
   protected workingMemory?: WorkingMemoryConfig;
+  protected processors: MemoryProcessor[] = [];
 
   /**
    * Create a new Memory instance
@@ -33,9 +37,15 @@ export class Memory {
     this.semanticRecall = validatedConfig.semanticRecall;
     this.workingMemory = validatedConfig.workingMemory;
 
+    // Initialize processors if provided
+    if (validatedConfig.processors && Array.isArray(validatedConfig.processors)) {
+      this.processors = validatedConfig.processors;
+      logger.debug(`Initialized ${this.processors.length} memory processors`);
+    }
+
     // Log memory initialization
     logger.info(`Initializing memory with provider: ${validatedConfig.provider}`);
-    logger.debug(`Memory configuration: lastMessages=${this.lastMessages}, semanticRecall=${!!this.semanticRecall}, workingMemory=${!!this.workingMemory}`);
+    logger.debug(`Memory configuration: lastMessages=${this.lastMessages}, semanticRecall=${!!this.semanticRecall}, workingMemory=${!!this.workingMemory}, processors=${this.processors.length}`);
 
     // Create the appropriate memory instance based on the provider
     switch (validatedConfig.provider) {
@@ -59,17 +69,17 @@ export class Memory {
   private createUpstashMemory(options?: Record<string, any>) {
     logger.info(`Creating Upstash memory with options: ${JSON.stringify(options)}`);
 
-    // Import the UpstashMemory class
+    // Import UpstashMemory dynamically to avoid circular dependency
     const { UpstashMemory } = require('./upstashMemory');
 
     // Create and return a new UpstashMemory instance with enhanced options
     return new UpstashMemory({
-      url: options?.url || process.env.UPSTASH_REDIS_REST_URL,
-      token: options?.token || process.env.UPSTASH_REDIS_REST_TOKEN,
-      prefix: options?.prefix || 'mastra:',
-      vectorUrl: options?.vectorUrl || process.env.UPSTASH_VECTOR_REST_URL,
-      vectorToken: options?.vectorToken || process.env.UPSTASH_VECTOR_REST_TOKEN,
-      vectorIndex: options?.vectorIndex || 'mastra-memory'
+      url: options?.url || process.env[ENV.UPSTASH_REDIS_URL] || '',
+      token: options?.token || process.env[ENV.UPSTASH_REDIS_TOKEN] || '',
+      prefix: options?.prefix || DEFAULT_MEMORY.PREFIX,
+      vectorUrl: options?.vectorUrl || process.env[ENV.UPSTASH_VECTOR_URL],
+      vectorToken: options?.vectorToken || process.env[ENV.UPSTASH_VECTOR_TOKEN],
+      vectorIndex: options?.vectorIndex || options?.namespace || DEFAULT_MEMORY.NAMESPACE || 'mastra-memory'
     });
   }
 
@@ -112,6 +122,40 @@ export class Memory {
   getMemoryInstance() {
     return this.instance;
   }
+
+  /**
+   * Apply memory processors to a list of messages
+   * @param messages - Array of messages to process
+   * @returns Processed array of messages
+   */
+  protected applyProcessors(messages: Message[]): Message[] {
+    if (!this.processors || this.processors.length === 0) {
+      return messages;
+    }
+
+    logger.debug(`Applying ${this.processors.length} processors to ${messages.length} messages`);
+
+    let processedMessages = [...messages];
+
+    // Apply each processor in sequence
+    for (const processor of this.processors) {
+      try {
+        const beforeCount = processedMessages.length;
+        processedMessages = processor.process(processedMessages);
+        const afterCount = processedMessages.length;
+
+        logger.debug(`Processor ${processor.constructor.name} processed messages: ${beforeCount} -> ${afterCount}`);
+      } catch (error) {
+        logger.error(`Error applying processor ${processor.constructor.name}: ${error}`);
+        // Continue with the next processor if one fails
+      }
+    }
+
+    logger.debug(`After processing: ${messages.length} -> ${processedMessages.length} messages`);
+    return processedMessages;
+  }
+
+
 
   /**
    * Add a message to the memory
@@ -197,7 +241,11 @@ export class Memory {
     }
 
     logger.debug(`Retrieved ${messages.length} messages for thread ${threadId}`);
-    return messages;
+
+    // Apply processors to the messages
+    const processedMessages = this.applyProcessors(messages);
+
+    return processedMessages;
   }
 
   /**

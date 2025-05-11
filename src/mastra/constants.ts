@@ -1,6 +1,6 @@
 /**
  * Core constants for the Mastra AI application
- * 
+ *
  * This file contains shared constants used across multiple modules.
  */
 
@@ -43,6 +43,8 @@ export const DEFAULT_XENOVA_MODEL = 'all-MiniLM-L6-v2';
 export const DEFAULT_EMBEDDING_DIMENSIONS = {
   XENOVA: 384,
   GOOGLE: 1536,
+  OPENAI: 1536, // For OpenAI embeddings
+  COHERE: 1024, // For Cohere embeddings
 };
 
 /**
@@ -52,6 +54,8 @@ export const DEFAULT_VECTOR_SEARCH = {
   TOP_K: 5,
   INCLUDE_METADATA: true,
   INCLUDE_VECTORS: false,
+  THRESHOLD: 0.7,
+  METRIC: 'cosine',
 };
 
 /**
@@ -60,7 +64,14 @@ export const DEFAULT_VECTOR_SEARCH = {
 export const DEFAULT_MEMORY = {
   PROVIDER: 'upstash',
   PREFIX: 'mastra:',
+  NAMESPACE: 'mastra-memory',
+  LAST_MESSAGES: 20,
+  SEMANTIC_RECALL_TOP_K: 5,
+  SEMANTIC_RECALL_MESSAGE_RANGE: 100,
+  WORKING_MEMORY_UPDATE_FREQUENCY: 5,
 };
+
+
 
 /**
  * Default namespace for vector stores

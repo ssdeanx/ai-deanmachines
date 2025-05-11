@@ -1,19 +1,8 @@
-import { Mastra } from '@mastra/core';
-import { createLogger } from '@mastra/core/logger';
+// Re-export the logger for use throughout the application
+export { logger, createLogger } from './utils/logger';
 
-// Create logger instance
-export const logger = createLogger({
-  name: 'Mastra',
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-});
-
-// We'll import and export agent implementations from their respective modules
-// This is done via the export * from './agents' statement below
-
-// Initialize Mastra instance with default configuration and logger
-export const mastra = new Mastra({
-  logger,
-});
+// Export the Mastra instance and utility functions from config
+export { mastra, getAllAgents, importAgents } from './config';
 
 // Export core types and constants
 export * from './types';

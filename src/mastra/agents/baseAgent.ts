@@ -4,8 +4,10 @@ import { google } from '@ai-sdk/google';
 // Import types and constants
 import { AgentConfig, AgentConfigSchema } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../index';
-import { Memory, UpstashMemory } from '../memory';
+import { logger } from '../utils/logger';
+import { Memory } from '../memory';
+import { getTracer, recordLLMMetrics } from '../utils/telemetry';
+import { simpleTokenCounter, calculateCost } from '../evals/utils';
 
 /**
  * BaseAgent class that serves as the foundation for all agent types
@@ -111,6 +113,20 @@ export class BaseAgent {
     logger.info(`Streaming response for input: ${input.substring(0, 50)}${input.length > 50 ? '...' : ''}`);
     logger.debug(`Stream options: ${JSON.stringify(options)}`);
 
+    // Create a tracer for this operation
+    const tracer = getTracer('mastra.agent');
+    const span = tracer.startSpan('stream');
+    span.setAttribute('agent.type', this.type);
+    span.setAttribute('agent.model', this.modelName);
+    span.setAttribute('input.length', input.length);
+
+    // Start timing the operation
+    const startTime = Date.now();
+
+    // Estimate prompt tokens
+    const promptTokens = simpleTokenCounter(input);
+    span.setAttribute('prompt.tokens', promptTokens);
+
     // Handle memory integration
     await this.prepareMemoryContext(input, options);
 
@@ -125,9 +141,95 @@ export class BaseAgent {
         await this.storeMessageInMemory(input, 'user', 'text');
       }
 
+      // For streaming, we can't know the completion tokens or total cost yet
+      // So we just record what we know
+      recordLLMMetrics({
+        promptTokens,
+        modelName: this.modelName,
+        operationType: 'stream'
+      });
+
+      // For streaming, we'll record metrics after the response is complete
+      const agent = this;
+      let fullText = '';
+
+      // We'll use a simpler approach - record metrics after the stream completes
+      // This is a simplified approach that works with the Vercel AI SDK
+      setTimeout(async () => {
+        try {
+          // Wait a bit to ensure the stream has completed
+          // In a real implementation, you would use a more robust approach
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Get the final text from the response
+          try {
+            // The text property might be a Promise or a string
+            const responseText = await Promise.resolve(response.text);
+            if (typeof responseText === 'string') {
+              fullText = responseText;
+            }
+          } catch (error) {
+            logger.warn(`Error getting response text: ${error}`);
+          }
+
+          // Calculate completion tokens and latency
+          const completionTokens = simpleTokenCounter(fullText);
+          const totalTokens = promptTokens + completionTokens;
+          const latencyMs = Date.now() - startTime;
+
+          // Calculate cost
+          const cost = calculateCost(
+            { promptTokens, completionTokens, totalTokens },
+            agent.modelName
+          );
+
+          // Record final metrics
+          recordLLMMetrics({
+            completionTokens,
+            totalTokens,
+            cost,
+            latency: latencyMs,
+            modelName: agent.modelName,
+            operationType: 'stream_complete'
+          });
+
+          // Add metrics to span
+          span.setAttribute('completion.tokens', completionTokens);
+          span.setAttribute('total.tokens', totalTokens);
+          span.setAttribute('latency.ms', latencyMs);
+          span.setAttribute('cost.usd', cost);
+          span.setAttribute('response.length', fullText.length);
+
+          // Store the assistant's response in memory if available
+          if (agent.memory && agent.threadId && fullText) {
+            await agent.storeMessageInMemory(fullText, 'assistant', 'text');
+          }
+        } catch (error) {
+          logger.error(`Error recording stream metrics: ${error}`);
+        } finally {
+          span.end();
+        }
+      }, 2000); // Wait 2 seconds to ensure the stream has completed
+
       return response;
     } catch (error) {
       logger.error(`Error streaming response: ${error}`);
+
+      // Record error metrics
+      recordLLMMetrics({
+        promptTokens,
+        error: true,
+        modelName: this.modelName,
+        operationType: 'stream'
+      });
+
+      // Record error in span
+      span.recordException({
+        name: 'StreamError',
+        message: String(error)
+      });
+      span.end();
+
       throw error;
     }
   }
@@ -142,6 +244,20 @@ export class BaseAgent {
     logger.info(`Generating response for input: ${input.substring(0, 50)}${input.length > 50 ? '...' : ''}`);
     logger.debug(`Generate options: ${JSON.stringify(options)}`);
 
+    // Create a tracer for this operation
+    const tracer = getTracer('mastra.agent');
+    const span = tracer.startSpan('generate');
+    span.setAttribute('agent.type', this.type);
+    span.setAttribute('agent.model', this.modelName);
+    span.setAttribute('input.length', input.length);
+
+    // Start timing the operation
+    const startTime = Date.now();
+
+    // Estimate prompt tokens
+    const promptTokens = simpleTokenCounter(input);
+    span.setAttribute('prompt.tokens', promptTokens);
+
     // Handle memory integration
     await this.prepareMemoryContext(input, options);
 
@@ -155,14 +271,60 @@ export class BaseAgent {
       const response = await this.agent.generate(input, options);
       logger.debug('Response generated successfully');
 
+      // Calculate completion tokens and latency
+      const completionTokens = response.text ? simpleTokenCounter(response.text) : 0;
+      const totalTokens = promptTokens + completionTokens;
+      const latencyMs = Date.now() - startTime;
+
+      // Calculate cost
+      const cost = calculateCost(
+        { promptTokens, completionTokens, totalTokens },
+        this.modelName
+      );
+
+      // Record metrics
+      recordLLMMetrics({
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        cost,
+        latency: latencyMs,
+        modelName: this.modelName,
+        operationType: 'generate'
+      });
+
+      // Add metrics to span
+      span.setAttribute('completion.tokens', completionTokens);
+      span.setAttribute('total.tokens', totalTokens);
+      span.setAttribute('latency.ms', latencyMs);
+      span.setAttribute('cost.usd', cost);
+      span.setAttribute('response.length', response.text?.length || 0);
+
       // Store the assistant's response in memory if available
       if (this.memory && this.threadId && response.text) {
         await this.storeMessageInMemory(response.text, 'assistant', 'text');
       }
 
+      span.end();
       return response;
     } catch (error) {
       logger.error(`Error generating response: ${error}`);
+
+      // Record error metrics
+      recordLLMMetrics({
+        promptTokens,
+        error: true,
+        modelName: this.modelName,
+        operationType: 'generate'
+      });
+
+      // Record error in span
+      span.recordException({
+        name: 'GenerateError',
+        message: String(error)
+      });
+      span.end();
+
       throw error;
     }
   }
@@ -452,3 +614,4 @@ export class BaseAgent {
     return this.agent;
   }
 }
+
