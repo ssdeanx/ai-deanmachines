@@ -1,0 +1,27 @@
+{
+  "name": "ai-deanmachines",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "mastra dev",
+    "build": "mastra build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/google": "^1.2.17",
+    "@mastra/core": "0.9.4-alpha.1",
+    "@mastra/libsql": "0.0.4-alpha.1",
+    "@mastra/memory": "0.3.4-alpha.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "mastra": "0.6.3-alpha.1",
+    "typescript": "^5.8.3"
+  }
+}

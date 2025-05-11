@@ -1,0 +1,75 @@
+{  "nodes": [
+    {      "id": "user",
+      "type": "user",      "name": "User",
+      "description": "End user interacting with the application"    },
+    {      "id": "app",
+      "type": "application",      "name": "AI Application",
+      "description": "Main application interface"    },
+    {      "id": "llm",
+      "type": "model",      "name": "Google AI Model",
+      "description": "Google AI model for generating responses",      "provider": "google"
+    },    {
+      "id": "memory",      "type": "memory",
+      "name": "Conversation Memory",      "description": "Stores conversation history and context",
+      "provider": "upstash"    },
+    {      "id": "vectordb",
+      "type": "database",      "name": "Vector Database",
+      "description": "Stores and retrieves vector embeddings for semantic search",      "provider": "upstash"
+    }  ],
+  "edges": [    {
+      "source": "user",      "target": "app",
+      "label": "interacts with"    },
+    {      "source": "app",
+      "target": "llm",      "label": "sends prompts to"
+    },    {
+      "source": "llm",      "target": "app",
+      "label": "returns responses to"    },
+    {      "source": "app",
+      "target": "memory",      "label": "stores conversation in"
+    },    {
+      "source": "memory",      "target": "app",
+      "label": "provides context to"    },
+    {      "source": "app",
+      "target": "vectordb",      "label": "queries"
+    },    {
+      "source": "vectordb",      "target": "app",
+      "label": "returns relevant data to"    }
+  ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
