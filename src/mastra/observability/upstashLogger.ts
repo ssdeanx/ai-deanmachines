@@ -1,153 +1,126 @@
 /**
  * Upstash logger implementation for Mastra
  *
- * This file provides a Winston transport that stores logs in Upstash Redis
+ * This file provides a logger that stores logs in Upstash Redis
  * with batching, retention policies, and OpenTelemetry integration.
  */
 
-import Transport from 'winston-transport';
 import { v4 as uuidv4 } from 'uuid';
-import { createLogger as createWinstonLogger, format, transports, Logger as WinstonLogger } from 'winston';
-import { UpstashLoggerConfig, LoggerConfig, LogLevel } from './types';
+import { UpstashLoggerConfig, LogLevel } from './types';
 import { DEFAULT_UPSTASH_LOGGER_CONFIG, DEFAULT_LOGGER_CONFIG } from './constants';
 import { getTracer } from './telemetry';
-// CRITICAL: Use @mastra/upstash package instead of @upstash/redis directly
-// Note: We're still importing Redis from @upstash/redis for now, but this should be replaced
-// with the appropriate class from @mastra/upstash when available
+import { createLogger } from './logger';
+// Use @mastra/upstash package for all Upstash operations
 import { UpstashStore } from '@mastra/upstash';
+// Temporarily import Redis from @upstash/redis until @mastra/upstash provides a full replacement
 import { Redis } from '@upstash/redis';
 
 /**
- * Winston transport for Upstash Redis
- * Stores logs in Upstash Redis with batching and retention policies
+ * Upstash logger implementation for Mastra
+ *
+ * This implementation uses the Mastra logger and enhances it with Upstash integration
+ * for persistent logging with batching, retention policies, and OpenTelemetry integration.
  */
-export class UpstashTransport extends Transport {
-  private url: string;
-  private token: string;
-  private prefix: string;
-  private batchSize: number;
-  private flushInterval: number;
-  private retentionPeriod: number;
-  private redis: Redis;
-  private logBatch: any[] = [];
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private tracer = getTracer('mastra.logger.upstash');
 
-  /**
-   * Create a new UpstashTransport instance
-   * @param options - Configuration options for the transport
-   */
-  constructor(options: UpstashLoggerConfig) {
-    super(options);
+/**
+ * Create an Upstash logger instance
+ *
+ * @param options - Configuration options for the logger
+ * @returns A Mastra logger instance with Upstash integration
+ */
+export function createUpstashLogger(options: {
+  url: string;
+  token: string;
+  name?: string;
+  level?: LogLevel;
+  prefix?: string;
+  batchSize?: number;
+  flushInterval?: number;
+  retentionPeriod?: number;
+}) {
+  // Create a standard Mastra logger
+  const logger = createLogger({
+    name: options.name || DEFAULT_LOGGER_CONFIG.name,
+    level: (options.level || DEFAULT_LOGGER_CONFIG.level) as 'debug' | 'info' | 'warn' | 'error',
+    timestamps: true,
+    includeTraceId: true,
+    colorize: process.env.NODE_ENV !== 'production',
+    console: true,
+    file: false,
+    json: process.env.NODE_ENV === 'production',
+  });
 
-    // Set required properties
-    this.url = options.url;
-    this.token = options.token;
+  // Create an Upstash store for direct access
+  const upstashStore = new UpstashStore({
+    url: options.url,
+    token: options.token,
+  });
 
-    // Set optional properties with defaults
-    this.prefix = options.prefix || DEFAULT_UPSTASH_LOGGER_CONFIG.prefix;
-    this.batchSize = options.batchSize || DEFAULT_UPSTASH_LOGGER_CONFIG.batchSize;
-    this.flushInterval = options.flushInterval || DEFAULT_UPSTASH_LOGGER_CONFIG.flushInterval;
-    this.retentionPeriod = options.retentionPeriod || DEFAULT_UPSTASH_LOGGER_CONFIG.retentionPeriod;
+  // Create a Redis client for operations not covered by UpstashStore
+  const redis = new Redis({
+    url: options.url,
+    token: options.token,
+  });
 
-    // Initialize Upstash Redis client
-    this.redis = new Redis({
-      url: this.url,
-      token: this.token,
-    });
+  // Create a tracer for OpenTelemetry
+  const tracer = getTracer('mastra.logger.upstash');
 
-    // Start the flush timer
-    this.startFlushTimer();
-  }
+  // Set up configuration
+  const prefix = options.prefix || DEFAULT_UPSTASH_LOGGER_CONFIG.prefix;
+  const batchSize = options.batchSize || DEFAULT_UPSTASH_LOGGER_CONFIG.batchSize;
+  const flushInterval = options.flushInterval || DEFAULT_UPSTASH_LOGGER_CONFIG.flushInterval;
+  const retentionPeriod = options.retentionPeriod || DEFAULT_UPSTASH_LOGGER_CONFIG.retentionPeriod;
 
-  /**
-   * Log method called by Winston
-   * @param info - Log information
-   * @param callback - Callback function
-   */
-  log(info: any, callback: () => void) {
-    // Create a span for the log operation
-    const span = this.tracer.startSpan('log');
-    span.setAttribute('log.level', info.level);
+  // Set up log batching
+  let logBatch: any[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-    try {
-      // Add timestamp if not present
-      if (!info.timestamp) {
-        info.timestamp = new Date().toISOString();
-      }
-
-      // Add log ID if not present
-      if (!info.id) {
-        info.id = uuidv4();
-      }
-
-      // Add to batch
-      this.logBatch.push(info);
-
-      // Flush if batch size reached
-      if (this.logBatch.length >= this.batchSize) {
-        this.flush();
-      }
-
-      span.end();
-      callback();
-    } catch (error) {
-      span.recordException(error as Error);
-      span.end();
-      callback();
-    }
-  }
-
-  /**
-   * Start the flush timer
-   */
-  private startFlushTimer() {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
+  // Start the flush timer
+  const startFlushTimer = () => {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
     }
 
-    this.flushTimer = setTimeout(() => {
-      if (this.logBatch.length > 0) {
-        this.flush();
+    flushTimer = setTimeout(() => {
+      if (logBatch.length > 0) {
+        flush();
       }
-      this.startFlushTimer(); // Restart the timer
-    }, this.flushInterval);
-  }
+      startFlushTimer(); // Restart the timer
+    }, flushInterval);
+  };
 
-  /**
-   * Flush the log batch to Upstash Redis
-   */
-  private async flush() {
-    if (this.logBatch.length === 0) {
+  // Flush logs to Upstash
+  const flush = async () => {
+    if (logBatch.length === 0) {
       return;
     }
 
     // Create a span for the flush operation
-    const span = this.tracer.startSpan('flush');
-    span.setAttribute('batch.size', this.logBatch.length);
+    const span = tracer.startSpan('flush');
+    span.setAttribute('batch.size', logBatch.length);
 
     try {
-      const batch = [...this.logBatch];
-      this.logBatch = [];
+      const batch = [...logBatch];
+      logBatch = [];
 
       // Process each log entry
-      const pipeline = this.redis.pipeline();
+      const pipeline = redis.pipeline();
 
       for (const log of batch) {
         const logId = log.id;
         const timestamp = new Date(log.timestamp).getTime();
-        const key = `${this.prefix}${timestamp}:${logId}`;
+        const key = `${prefix}${timestamp}:${logId}`;
 
         // Store the log entry
         pipeline.set(key, JSON.stringify(log));
 
         // Set expiration if retention period is defined
-        if (this.retentionPeriod > 0) {
-          pipeline.expire(key, this.retentionPeriod);
+        if (retentionPeriod > 0) {
+          pipeline.expire(key, retentionPeriod);
         }
 
         // Add to time-sorted index
-        pipeline.zadd(`${this.prefix}index`, { score: timestamp, member: key });
+        pipeline.zadd(`${prefix}index`, { score: timestamp, member: key });
       }
 
       // Execute the pipeline
@@ -159,29 +132,27 @@ export class UpstashTransport extends Transport {
       span.end();
 
       // Put logs back in the batch for retry
-      this.logBatch = [...this.logBatch, ...this.logBatch];
+      logBatch = [...logBatch, ...logBatch];
 
       // Limit batch size to prevent memory issues
-      if (this.logBatch.length > this.batchSize * 3) {
-        this.logBatch = this.logBatch.slice(-this.batchSize * 3);
+      if (logBatch.length > batchSize * 3) {
+        logBatch = logBatch.slice(-batchSize * 3);
       }
     }
-  }
+  };
 
-  /**
-   * Clean up old logs based on retention policy
-   */
-  async cleanup() {
+  // Clean up old logs
+  const cleanup = async () => {
     // Create a span for the cleanup operation
-    const span = this.tracer.startSpan('cleanup');
+    const span = tracer.startSpan('cleanup');
 
     try {
       const now = Date.now();
-      const cutoff = now - (this.retentionPeriod * 1000);
+      const cutoff = now - (retentionPeriod * 1000);
 
       // Find keys older than the cutoff
-      const oldKeys = await this.redis.zrange(
-        `${this.prefix}index`,
+      const oldKeys = await redis.zrange(
+        `${prefix}index`,
         0,
         cutoff,
         { byScore: true }
@@ -191,11 +162,11 @@ export class UpstashTransport extends Transport {
         span.setAttribute('cleanup.count', oldKeys.length);
 
         // Delete old keys
-        const pipeline = this.redis.pipeline();
+        const pipeline = redis.pipeline();
 
         for (const key of oldKeys) {
           pipeline.del(String(key));
-          pipeline.zrem(`${this.prefix}index`, String(key));
+          pipeline.zrem(`${prefix}index`, String(key));
         }
 
         await pipeline.exec();
@@ -206,22 +177,18 @@ export class UpstashTransport extends Transport {
       span.recordException(error as Error);
       span.end();
     }
-  }
+  };
 
-  /**
-   * Query logs with filtering options
-   * @param options - Query options
-   * @returns Filtered logs
-   */
-  async query(options: {
+  // Query logs
+  const query = async (options: {
     level?: LogLevel;
     from?: Date | number;
     to?: Date | number;
     limit?: number;
     offset?: number;
-  } = {}) {
+  } = {}) => {
     // Create a span for the query operation
-    const span = this.tracer.startSpan('query');
+    const span = tracer.startSpan('query');
 
     try {
       const {
@@ -241,15 +208,14 @@ export class UpstashTransport extends Transport {
       span.setAttribute('query.offset', offset);
 
       // Get keys in the time range
-      // First get all keys in the time range
-      const allKeys = await this.redis.zrange(
-        `${this.prefix}index`,
+      const allKeys = await redis.zrange(
+        `${prefix}index`,
         fromTime,
         toTime,
         { byScore: true }
       );
 
-      // Then apply pagination manually
+      // Apply pagination manually
       const keys = allKeys.slice(offset, offset + limit);
 
       if (keys.length === 0) {
@@ -259,7 +225,7 @@ export class UpstashTransport extends Transport {
 
       // Get log entries
       const stringKeys = keys.map((key: any) => String(key));
-      const logs = await this.redis.mget(...stringKeys);
+      const logs = await redis.mget(...stringKeys);
 
       // Parse and filter logs
       const result = logs
@@ -274,123 +240,87 @@ export class UpstashTransport extends Transport {
       span.end();
       return [];
     }
-  }
+  };
 
-  /**
-   * Close the transport
-   */
-  async close() {
+  // Close the logger
+  const close = async () => {
     // Create a span for the close operation
-    const span = this.tracer.startSpan('close');
+    const span = tracer.startSpan('close');
 
     try {
       // Clear the flush timer
-      if (this.flushTimer) {
-        clearTimeout(this.flushTimer);
-        this.flushTimer = null;
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
       }
 
       // Flush any remaining logs
-      await this.flush();
+      await flush();
 
       span.end();
     } catch (error) {
       span.recordException(error as Error);
       span.end();
     }
-  }
-}
-
-/**
- * Create an Upstash logger instance
- *
- * @param options - Configuration options for the logger
- * @returns A Winston logger instance with Upstash transport and additional methods
- */
-export function createUpstashLogger(options: {
-  url: string;
-  token: string;
-  name?: string;
-  level?: string;
-  prefix?: string;
-  batchSize?: number;
-  flushInterval?: number;
-  retentionPeriod?: number;
-  additionalTransports?: Transport[];
-}) {
-  // Use LoggerConfig and UpstashLoggerConfig types to validate options
-  const loggerOptions: Partial<LoggerConfig> = {
-    name: options.name || DEFAULT_LOGGER_CONFIG.name,
-    level: options.level as LogLevel || DEFAULT_LOGGER_CONFIG.level,
-    format: 'json'
   };
 
-  const upstashOptions: UpstashLoggerConfig = {
-    url: options.url,
-    token: options.token,
-    prefix: options.prefix || DEFAULT_UPSTASH_LOGGER_CONFIG.prefix,
-    batchSize: options.batchSize || DEFAULT_UPSTASH_LOGGER_CONFIG.batchSize,
-    flushInterval: options.flushInterval || DEFAULT_UPSTASH_LOGGER_CONFIG.flushInterval,
-    retentionPeriod: options.retentionPeriod || DEFAULT_UPSTASH_LOGGER_CONFIG.retentionPeriod,
-    level: options.level as LogLevel || DEFAULT_LOGGER_CONFIG.level
-  };
-
-  // Create Upstash transport
-  const upstashTransport = new UpstashTransport(upstashOptions);
-
-  // Create Winston logger with Upstash transport
-  const logger = createWinstonLogger({
-    level: loggerOptions.level,
-    format: format.combine(
-      format.timestamp(),
-      format.json()
-    ),
-    defaultMeta: { service: loggerOptions.name },
-    transports: [
-      // Console transport for local development
-      new transports.Console({
-        format: format.combine(
-          format.colorize(),
-          format.simple()
-        )
-      }),
-      // Upstash transport for persistent logging
-      upstashTransport,
-      // Additional transports
-      ...(options.additionalTransports || [])
-    ]
-  });
-
-  // Add Upstash-specific methods to the logger
+  // Create an enhanced logger with additional methods
   const enhancedLogger = logger as any;
 
-  // Add query method
-  enhancedLogger.query = async (queryOptions: any) => {
-    return upstashTransport.query(queryOptions);
-  };
+  // Add a custom log method that also sends logs to Upstash
+  const logToUpstash = (level: string, message: string, meta?: Record<string, any>) => {
+    // Create a log entry for Upstash
+    const logEntry = {
+      id: uuidv4(),
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      ...meta
+    };
 
-  // Add cleanup method
-  enhancedLogger.cleanup = async () => {
-    return upstashTransport.cleanup();
-  };
+    // Add to batch
+    logBatch.push(logEntry);
 
-  // Add close method that ensures Upstash transport is properly closed
-  const originalClose = enhancedLogger.close;
-  enhancedLogger.close = async () => {
-    await upstashTransport.close();
-    if (originalClose) {
-      return originalClose.call(enhancedLogger);
+    // Flush if batch size reached
+    if (logBatch.length >= batchSize) {
+      flush();
     }
   };
 
-  // Add a reference to the UpstashStore for direct access if needed
-  // This ensures the UpstashStore import is used
-  enhancedLogger.getUpstashStore = () => {
-    return new UpstashStore({
-      url: options.url,
-      token: options.token,
-    });
+  // Override debug, info, warn, and error methods to also log to Upstash
+  const originalDebug = enhancedLogger.debug;
+  enhancedLogger.debug = (message: string, meta?: Record<string, any>) => {
+    originalDebug.call(enhancedLogger, message, meta);
+    logToUpstash('debug', message, meta);
   };
+
+  const originalInfo = enhancedLogger.info;
+  enhancedLogger.info = (message: string, meta?: Record<string, any>) => {
+    originalInfo.call(enhancedLogger, message, meta);
+    logToUpstash('info', message, meta);
+  };
+
+  const originalWarn = enhancedLogger.warn;
+  enhancedLogger.warn = (message: string, meta?: Record<string, any>) => {
+    originalWarn.call(enhancedLogger, message, meta);
+    logToUpstash('warn', message, meta);
+  };
+
+  const originalError = enhancedLogger.error;
+  enhancedLogger.error = (message: string, meta?: Record<string, any>) => {
+    originalError.call(enhancedLogger, message, meta);
+    logToUpstash('error', message, meta);
+  };
+
+  // Add Upstash-specific methods to the logger
+  enhancedLogger.query = query;
+  enhancedLogger.cleanup = cleanup;
+  enhancedLogger.close = close;
+  enhancedLogger.flush = flush;
+  enhancedLogger.getUpstashStore = () => upstashStore;
+
+  // Start the flush timer
+  startFlushTimer();
 
   return enhancedLogger;
 }

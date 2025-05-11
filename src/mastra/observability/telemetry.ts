@@ -7,11 +7,11 @@ import {
   MeterProvider
 } from '@opentelemetry/sdk-metrics';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { diag, DiagConsoleLogger, DiagLogLevel, metrics, Meter, trace } from '@opentelemetry/api';
 import { logger } from './logger';
 import { TelemetryConfig, TelemetrySDK } from './types';
-import { DEFAULT_TELEMETRY_CONFIG, OTEL_AI_ATTRIBUTES, SEMRESATTRS } from './constants';
+import { DEFAULT_TELEMETRY_CONFIG, SEMRESATTRS } from './constants';
 
 /**
  * Configure and initialize OpenTelemetry
@@ -61,16 +61,19 @@ export function initTelemetry(config: TelemetryConfig = {}): TelemetrySDK {
   }
 
   // Create a resource that identifies your service
+  // Using SEMRESATTRS constants for semantic resource attributes
   const resourceAttributes = {
     [SEMRESATTRS.SERVICE_NAME]: serviceName || process.env.OTEL_SERVICE_NAME || 'mastra-app',
     [SEMRESATTRS.SERVICE_VERSION]: serviceVersion || process.env.npm_package_version || '1.0.0',
     [SEMRESATTRS.DEPLOYMENT_ENVIRONMENT]: environment || process.env.NODE_ENV || 'development',
     'app.name': 'mastra-ai',
     'app.component': 'agent-framework',
+    'ai.framework': 'mastra',
+    'ai.version': process.env.npm_package_version || '1.0.0',
   };
 
   // Create the resource using the attributes
-  const resource = new Resource(resourceAttributes);
+  const resource = resourceFromAttributes(resourceAttributes);
 
   // Configure trace exporters
   const traceExporters = [];

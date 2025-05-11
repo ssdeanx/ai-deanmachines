@@ -17,7 +17,7 @@ import { Logger } from 'winston';
 import { Redis } from '@upstash/redis';
 
 // Langfuse imports
-import { LangfuseExporter } from 'langfuse-vercel';
+import { Langfuse } from 'langfuse';
 
 /**
  * Logger level type
@@ -90,3 +90,81 @@ export interface MastraTelemetryConfig {
  * OpenTelemetry SDK instance
  */
 export type TelemetrySDK = NodeSDK | null;
+
+/**
+ * Langfuse trace options
+ */
+export interface LangfuseTraceOptions {
+  name: string;
+  userId?: string;
+  sessionId?: string;
+  id?: string;
+  metadata?: Record<string, any>;
+  tags?: string[];
+  input?: any;
+  output?: any;
+}
+
+/**
+ * Langfuse generation options
+ */
+export interface LangfuseGenerationOptions {
+  name: string;
+  model: string;
+  modelParameters?: Record<string, any>;
+  input?: any;
+  output?: any;
+  usage?: {
+    input?: number;
+    output?: number;
+    total?: number;
+    unit?: 'TOKENS' | 'CHARACTERS' | 'MILLISECONDS' | 'SECONDS' | 'IMAGES' | 'REQUESTS';
+    inputCost?: number;
+    outputCost?: number;
+    totalCost?: number;
+  };
+  metadata?: Record<string, any>;
+  startTime?: Date;
+  endTime?: Date;
+}
+
+/**
+ * Langfuse span options
+ */
+export interface LangfuseSpanOptions {
+  name: string;
+  input?: any;
+  output?: any;
+  metadata?: Record<string, any>;
+  startTime?: Date;
+  endTime?: Date;
+}
+
+/**
+ * Langfuse event options
+ */
+export interface LangfuseEventOptions {
+  name: string;
+  input?: any;
+  output?: any;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Langfuse score options
+ */
+export interface LangfuseScoreOptions {
+  name: string;
+  value: number;
+  comment?: string;
+}
+
+/**
+ * Langfuse feedback options
+ */
+export interface LangfuseFeedbackOptions {
+  traceId: string;
+  score: number;
+  comment?: string;
+  userId?: string;
+}
