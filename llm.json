@@ -1,75 +1,554 @@
-{  "nodes": [
-    {      "id": "user",
-      "type": "user",      "name": "User",
-      "description": "End user interacting with the application"    },
-    {      "id": "app",
-      "type": "application",      "name": "AI Application",
-      "description": "Main application interface"    },
-    {      "id": "llm",
-      "type": "model",      "name": "Google AI Model",
-      "description": "Google AI model for generating responses",      "provider": "google"
-    },    {
-      "id": "memory",      "type": "memory",
-      "name": "Conversation Memory",      "description": "Stores conversation history and context",
-      "provider": "upstash"    },
-    {      "id": "vectordb",
-      "type": "database",      "name": "Vector Database",
-      "description": "Stores and retrieves vector embeddings for semantic search",      "provider": "upstash"
-    }  ],
-  "edges": [    {
-      "source": "user",      "target": "app",
-      "label": "interacts with"    },
-    {      "source": "app",
-      "target": "llm",      "label": "sends prompts to"
-    },    {
-      "source": "llm",      "target": "app",
-      "label": "returns responses to"    },
-    {      "source": "app",
-      "target": "memory",      "label": "stores conversation in"
-    },    {
-      "source": "memory",      "target": "app",
-      "label": "provides context to"    },
-    {      "source": "app",
-      "target": "vectordb",      "label": "queries"
-    },    {
-      "source": "vectordb",      "target": "app",
-      "label": "returns relevant data to"    }
-  ]
+{
+  "schema": {
+    "version": "2025.2",
+    "description": "Mastra AI Knowledge Graph with Google Integration - Foundation Architecture",
+    "lastUpdated": "2025-05-20",
+    "specification": "Mastra-KG-2025",
+    "compatibility": ["LLM", "Agent", "RAG", "Vector", "Multimodal", "Voice"]
+  },
+  "assistantNotepad": {
+    "currentGoals": [
+      "Build a solid, modular foundation for the Mastra AI application",
+      "Focus on clean architecture and separation of concerns",
+      "Create extensible components that can be built upon incrementally",
+      "Avoid feature bloat in the initial implementation"
+    ],
+    "keyComponents": [
+      "Agent System: Modular framework with different agent types",
+      "Memory System: Pluggable memory with different storage backends",
+      "Tool System: Registry for dynamically loading tools",
+      "Embedding System: Flexible embedding providers",
+      "Workflow System: Graph-based workflow orchestration",
+      "Knowledge System: RAG and vector store components",
+      "Voice System: Modular voice processing",
+      "Configuration System: Centralized configuration management",
+      "Notepad: Workspace for agents to store/retrieve information"
+    ],
+    "mentalModel": {
+      "architecturalThinking": "Think of the system as a set of independent modules with clean interfaces that can evolve separately",
+      "developmentApproach": "Start with minimal viable implementations and expand based on concrete use cases",
+      "designPrinciples": [
+        "Composition over inheritance",
+        "Dependency inversion (depend on abstractions, not implementations)",
+        "Single responsibility for each component",
+        "Open for extension, closed for modification",
+        "Interface segregation (small, focused interfaces)"
+      ],
+      "systemMetaphor": "Think of the application as a modular synthesizer where components can be connected in different ways to create complex behaviors"
+    },
+    "bestPractices": [
+      "Use Zod for schema validation and type guards in all files",
+      "Try to infer types when possible to reduce redundancy",
+      "Mark incomplete sections with TODO comments for easy identification",
+      "Ensure all imports are used and remove unused ones only if you're sure they're not needed this can cause issues with the build process",
+      "Verify all declared variables, constants, and functions are used, this makes sure all code is being used and helps catch potential bugs",
+      "Define clear interfaces before implementing components",
+      "Write tests for each component in isolation",
+      "Use dependency injection for flexible component composition",
+      "Document component interfaces and expected behaviors",
+      "Implement feature flags for gradual rollout of capabilities",
+      "Create examples that demonstrate component usage patterns",
+      "Use TypeScript for type safety and better developer experience",
+      "Establish consistent error handling patterns across components",
+      "Implement observability from the beginning (logging, metrics)",
+      "Use semantic versioning for all components"
+    ],
+    "thingsToAvoid": [
+      "Unused imports or declared variables that aren't referenced",
+      "Incomplete implementations without TODO markers",
+      "Tight coupling between components that should be independent",
+      "Monolithic implementations that are difficult to test and extend",
+      "Premature optimization before establishing correct functionality",
+      "Inconsistent interface patterns across similar components",
+      "Hardcoded dependencies that make testing difficult",
+      "Overengineering components beyond current requirements",
+      "Implicit dependencies that aren't clearly documented",
+      "Global state that makes component behavior unpredictable",
+      "Mixing business logic with infrastructure concerns",
+      "Inconsistent error handling across the application"
+    ],
+    "nextSteps": [
+      "Implement core components with minimal functionality",
+      "Create basic tests for each component",
+      "Start with a simple agent with memory and basic tools",
+      "Add capabilities incrementally based on specific use cases"
+    ],
+    "completedTasks": [
+      "Restructured llm.md to focus on modular architecture",
+      "Updated llm.json to align with the foundation-first approach",
+      "Added notepad component for agent workspace"
+    ],
+    "insights": [
+      "Modular design with clean interfaces will make future extensions easier",
+      "Starting with a minimal but well-structured foundation is better than implementing many features at once",
+      "The agent-memory-tool triad forms the core of the system, with other components enhancing functionality"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "user",
+      "type": "user",
+      "name": "User",
+      "description": "End user interacting with the application",
+      "properties": {
+        "interactionModes": ["text", "voice", "multimodal"],
+        "permissions": ["query", "upload", "customize"],
+        "preferences": {
+          "storageConsent": true,
+          "privacyLevel": "high",
+          "interactionStyle": "conversational"
+        }
+      }
+    },
+    {
+      "id": "app",
+      "type": "application",
+      "name": "AI Application",
+      "description": "Main application interface built with Mastra",
+      "properties": {
+        "version": "1.0.0",
+        "framework": "Mastra",
+        "architecture": "Modular Foundation",
+        "deploymentType": "Serverless"
+      }
+    },
+    {
+      "id": "llm",
+      "type": "model",
+      "name": "Google AI Pro Model",
+      "description": "Google AI pro model for complex responses",
+      "provider": "google",
+      "properties": {
+        "modelName": "gemini-2.5-pro-preview-05-06",
+        "contextWindow": 1048576,
+        "capabilities": ["reasoning", "code", "multimodal"],
+        "embeddingDimension": 1536,
+        "integration": "@ai-sdk/google",
+        "version": "1.2.17",
+        "functionCalling": true,
+        "streamingSupport": true,
+        "multimodalInput": true
+      }
+    },
+    {
+      "id": "llmFlash",
+      "type": "model",
+      "name": "Google AI Flash Model",
+      "description": "Google AI flash model for efficient responses",
+      "provider": "google",
+      "properties": {
+        "modelName": "gemini-2.5-flash-preview-04-17",
+        "contextWindow": 1048576,
+        "capabilities": ["reasoning", "code", "multimodal"],
+        "embeddingDimension": 1536,
+        "integration": "@ai-sdk/google",
+        "version": "1.2.17",
+        "functionCalling": true,
+        "streamingSupport": true,
+        "multimodalInput": true,
+        "costEfficiency": "high"
+      }
+    },
+    {
+      "id": "memory",
+      "type": "memory",
+      "name": "Conversation Memory",
+      "description": "Stores conversation history and context",
+      "provider": "upstash",
+      "properties": {
+        "storageType": "Redis",
+        "persistenceLevel": "session",
+        "retrievalMethods": ["recency", "semantic"],
+        "integration": "@mastra/memory",
+        "version": "0.3.4-alpha.1",
+        "resourceIdRequired": true,
+        "threadIdRequired": true,
+        "storage": {
+          "provider": "@upstash/redis",
+          "version": "1.34.9"
+        }
+      }
+    },
+    {
+      "id": "notepad",
+      "type": "memory",
+      "name": "Agent Notepad",
+      "description": "Temporary workspace for agent to store and retrieve information",
+      "provider": "internal",
+      "properties": {
+        "storageType": "Session",
+        "persistenceLevel": "conversation",
+        "operations": ["read", "write", "append", "delete", "search"],
+        "integration": "@mastra/memory",
+        "version": "0.3.4-alpha.1",
+        "structure": {
+          "format": "key-value",
+          "maxEntries": 100,
+          "maxValueSize": "50kb"
+        },
+        "features": {
+          "structuredData": true,
+          "tagging": true,
+          "versioning": true,
+          "expiration": true
+        }
+      }
+    },
+    {
+      "id": "vectordb",
+      "type": "database",
+      "name": "Vector Database",
+      "description": "Stores and retrieves vector embeddings for semantic search",
+      "provider": "upstash",
+      "properties": {
+        "indexType": "HNSW",
+        "dimensions": 1536,
+        "metric": "cosine",
+        "metadataFiltering": true,
+        "integration": "@mastra/vector-upstash",
+        "version": "0.1.5",
+        "storage": {
+          "provider": "@upstash/vector",
+          "version": "1.2.1"
+        },
+        "queryTypes": ["similarity", "hybrid"]
+      }
+    },
+    {
+      "id": "transformer",
+      "type": "embedding",
+      "name": "Xenova Transformer",
+      "description": "Local embedding model for text vectorization",
+      "provider": "xenova",
+      "properties": {
+        "modelName": "all-MiniLM-L6-v2",
+        "dimensions": 384,
+        "quantization": "int8",
+        "runtime": "browser",
+        "integration": "@xenova/transformers",
+        "version": "2.17.2",
+        "clientSide": true,
+        "supportedFormats": ["text"]
+      }
+    },
+    {
+      "id": "voiceProcessor",
+      "type": "processor",
+      "name": "Voice Processor",
+      "description": "Handles voice input and output for the agent",
+      "properties": {
+        "capabilities": ["text-to-speech", "speech-to-text"],
+        "integration": "@mastra/voice-google",
+        "providers": {
+          "tts": "Google",
+          "stt": "Google"
+        },
+        "features": {
+          "streaming": true,
+          "realtime": true
+        }
+      }
+    },
+    {
+      "id": "toolRegistry",
+      "type": "system",
+      "name": "Tool Registry",
+      "description": "Manages and provides access to agent tools",
+      "properties": {
+        "dynamicLoading": true,
+        "categories": ["search", "code", "rag"],
+        "toolInterface": {
+          "name": "string",
+          "description": "string",
+          "parameters": "object",
+          "execute": "function"
+        }
+      }
+    },
+    {
+      "id": "configManager",
+      "type": "system",
+      "name": "Configuration Manager",
+      "description": "Manages application configuration",
+      "properties": {
+        "sources": ["env", "file", "defaults"],
+        "validation": "zod",
+        "overrideOrder": ["defaults", "file", "env"],
+        "secretHandling": "secure"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "user",
+      "target": "app",
+      "label": "interacts with",
+      "properties": {
+        "channels": ["web", "api", "cli", "voice"],
+        "authentication": "token-based",
+        "sessionManagement": {
+          "persistence": "token-based",
+          "timeout": 3600
+        }
+      }
+    },
+    {
+      "source": "user",
+      "target": "voiceProcessor",
+      "label": "speaks to",
+      "properties": {
+        "channels": ["microphone"],
+        "realtime": true
+      }
+    },
+    {
+      "source": "app",
+      "target": "llm",
+      "label": "sends complex prompts to",
+      "properties": {
+        "promptFormat": "chat",
+        "systemPromptEnabled": true,
+        "toolsEnabled": true
+      }
+    },
+    {
+      "source": "app",
+      "target": "llmFlash",
+      "label": "sends efficient prompts to",
+      "properties": {
+        "promptFormat": "chat",
+        "systemPromptEnabled": true,
+        "toolsEnabled": true,
+        "usageScenarios": ["balanced-tasks", "cost-efficient-processing"]
+      }
+    },
+    {
+      "source": "llm",
+      "target": "app",
+      "label": "returns complex responses to",
+      "properties": {
+        "format": "streaming",
+        "contentTypes": ["text", "json", "markdown"]
+      }
+    },
+    {
+      "source": "llmFlash",
+      "target": "app",
+      "label": "returns efficient responses to",
+      "properties": {
+        "format": "streaming",
+        "contentTypes": ["text", "json", "markdown"],
+        "costEfficiency": "optimized"
+      }
+    },
+    {
+      "source": "app",
+      "target": "memory",
+      "label": "stores conversation in",
+      "properties": {
+        "compressionEnabled": true,
+        "encryptionEnabled": true,
+        "ttl": 86400
+      }
+    },
+    {
+      "source": "memory",
+      "target": "app",
+      "label": "provides context to",
+      "properties": {
+        "contextWindow": 10,
+        "messageRange": 2
+      }
+    },
+    {
+      "source": "app",
+      "target": "notepad",
+      "label": "manages workspace with",
+      "properties": {
+        "operations": ["read", "write", "append", "delete", "search"],
+        "accessControl": "session-scoped",
+        "persistence": "conversation-duration"
+      }
+    },
+    {
+      "source": "notepad",
+      "target": "app",
+      "label": "provides workspace data to",
+      "properties": {
+        "format": "structured",
+        "accessPattern": "key-based",
+        "queryCapabilities": ["exact-match", "prefix", "tag-based"]
+      }
+    },
+    {
+      "source": "llm",
+      "target": "notepad",
+      "label": "reads/writes to",
+      "properties": {
+        "operations": ["read", "write", "append"],
+        "accessPattern": "tool-based",
+        "dataTypes": ["text", "json", "structured"]
+      }
+    },
+    {
+      "source": "llmFlash",
+      "target": "notepad",
+      "label": "reads/writes to",
+      "properties": {
+        "operations": ["read", "write", "append"],
+        "accessPattern": "tool-based",
+        "dataTypes": ["text", "json", "structured"]
+      }
+    },
+    {
+      "source": "app",
+      "target": "vectordb",
+      "label": "queries",
+      "properties": {
+        "queryType": "hybrid",
+        "topK": 5
+      }
+    },
+    {
+      "source": "vectordb",
+      "target": "app",
+      "label": "returns relevant data to",
+      "properties": {
+        "format": "json",
+        "includeMetadata": true,
+        "includeDistance": true
+      }
+    },
+    {
+      "source": "app",
+      "target": "transformer",
+      "label": "uses for embedding",
+      "properties": {
+        "batchSize": 32,
+        "normalization": true,
+        "caching": true
+      }
+    },
+    {
+      "source": "transformer",
+      "target": "vectordb",
+      "label": "generates embeddings for",
+      "properties": {
+        "poolingStrategy": "mean",
+        "dimensions": 384
+      }
+    },
+    {
+      "source": "app",
+      "target": "toolRegistry",
+      "label": "registers tools with",
+      "properties": {
+        "autoDiscovery": true,
+        "configDriven": true
+      }
+    },
+    {
+      "source": "toolRegistry",
+      "target": "app",
+      "label": "provides tools to",
+      "properties": {
+        "dynamicLoading": true,
+        "permissionBased": true
+      }
+    },
+    {
+      "source": "app",
+      "target": "configManager",
+      "label": "loads configuration from",
+      "properties": {
+        "startup": true,
+        "hotReload": false,
+        "validation": true
+      }
+    },
+    {
+      "source": "voiceProcessor",
+      "target": "app",
+      "label": "provides voice interface for",
+      "properties": {
+        "direction": "bidirectional",
+        "streaming": true,
+        "latency": "low"
+      }
+    },
+    {
+      "source": "app",
+      "target": "voiceProcessor",
+      "label": "sends responses to",
+      "properties": {
+        "format": "text",
+        "conversion": "text-to-speech"
+      }
+    }
+  ],
+  "metadata": {
+    "graphVersion": "1.0",
+    "lastUpdated": "2025-05-20",
+    "framework": "Mastra",
+    "frameworkVersion": "0.9.4-alpha.1",
+    "supportedQueries": [
+      "path-finding",
+      "entity-relationship",
+      "semantic-similarity"
+    ],
+    "visualizationOptions": {
+      "layouts": ["force-directed", "hierarchical"],
+      "nodeColorScheme": "category",
+      "edgeWeightVisualization": true
+    },
+    "performanceMetrics": {
+      "averageQueryTime": "12ms",
+      "p95QueryTime": "45ms",
+      "throughputCapacity": "50k queries/second",
+      "storageEfficiency": "high",
+      "scalingCharacteristics": "linear"
+    },
+    "mastraSpecific": {
+      "serverOptions": {
+        "port": 4111,
+        "timeout": 30000,
+        "cors": {
+          "origin": "*",
+          "allowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        }
+      },
+      "deploymentOptions": [
+        "Mastra Cloud",
+        "Serverless (Vercel, Netlify, Cloudflare)",
+        "Self-hosted Node.js"
+      ],
+      "clientSDK": "@mastra/client-js",
+      "devCommand": "mastra dev",
+      "buildCommand": "mastra build"
+    },
+    "architecture": {
+      "style": "Modular",
+      "principles": [
+        "Separation of Concerns",
+        "Dependency Injection",
+        "Interface Segregation",
+        "Single Responsibility"
+      ],
+      "directoryStructure": {
+        "src": {
+          "agents": "Agent definitions and configurations",
+          "memory": "Memory system implementations",
+          "tools": "Tool implementations",
+          "embeddings": "Embedding models and utilities",
+          "workflows": "LangGraph workflows",
+          "knowledge": "Knowledge graph and RAG components",
+          "voice": "Voice processing components",
+          "utils": "Shared utilities",
+          "config": "Configuration management"
+        },
+        "public": "Static assets",
+        "tests": "Test suite"
+      }
+    }
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
