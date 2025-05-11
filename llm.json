@@ -8,10 +8,138 @@
   },
   "assistantNotepad": {
     "currentGoals": [
-      "Build a solid, modular foundation for the Mastra AI application",
-      "Focus on clean architecture and separation of concerns",
-      "Create extensible components that can be built upon incrementally",
-      "Avoid feature bloat in the initial implementation"
+      "Build a solid, modular foundation for the Mastra AI application with fully implemented components",
+      "Focus on quality over quantity - implement fewer components but with complete functionality",
+      "Ensure all components have proper error handling, logging, and fallback mechanisms",
+      "Create extensible components with well-defined interfaces that can be built upon incrementally",
+      "Thoroughly test each component before moving on to the next one",
+      "Avoid feature bloat in the initial implementation and focus on core functionality"
+    ],
+    "toolsUsed": [
+      {
+        "name": "remember",
+        "description": "Stores information in the assistant's long-term memory",
+        "usage": "Used to save important information for future reference",
+        "example": "remember({memory: 'Important information to recall later'})",
+        "bestPractices": [
+          "Use for storing important project-specific information",
+          "Keep memories concise and focused on one topic per memory",
+          "Use for information that will be useful across multiple sessions",
+          "Avoid storing sensitive or temporary information"
+        ]
+      },
+      {
+        "name": "search_docker",
+        "description": "Search the web using DuckDuckGo",
+        "usage": "Used to find information on the web",
+        "example": "search_docker({query: 'search query', max_results: 10})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Start with specific search terms and expand if needed",
+          "Use before fetch_content to find relevant URLs"
+        ]
+      },
+      {
+        "name": "fetch_content_docker",
+        "description": "Fetch and parse content from a webpage",
+        "usage": "Used to retrieve content from specific URLs",
+        "example": "fetch_content_docker({url: 'https://example.com'})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use after search_docker to get detailed information",
+          "Handle errors gracefully if the page cannot be accessed"
+        ]
+      },
+      {
+        "name": "search_wikipedia_docker",
+        "description": "Search Wikipedia for articles",
+        "usage": "Used to find information on Wikipedia",
+        "example": "search_wikipedia_docker({query: 'search query', limit: 5})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use specific search terms for better results",
+          "Follow up with get_article or get_summary for detailed content"
+        ]
+      },
+      {
+        "name": "get_article_docker",
+        "description": "Get full content of a Wikipedia article",
+        "usage": "Used to retrieve the complete content of a Wikipedia article",
+        "example": "get_article_docker({title: 'Article Title'})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use after search_wikipedia to get the correct article title",
+          "Handle long articles appropriately in your response"
+        ]
+      },
+      {
+        "name": "get_summary_docker",
+        "description": "Get summary of a Wikipedia article",
+        "usage": "Used to retrieve a concise summary of a Wikipedia article",
+        "example": "get_summary_docker({title: 'Article Title'})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use when only a brief overview is needed",
+          "Useful for quick information without the full article details"
+        ]
+      },
+      {
+        "name": "create_entities_docker",
+        "description": "Create multiple new entities in the knowledge graph",
+        "usage": "Used to add nodes to a Neo4j knowledge graph",
+        "example": "create_entities_docker({entities: [{name: 'Entity Name', entityType: 'Type', observations: ['Observation 1']}]})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Provide clear entity names and types",
+          "Include relevant observations for context",
+          "Use consistent naming conventions for entity types"
+        ]
+      },
+      {
+        "name": "create_relations_docker",
+        "description": "Create multiple new relations between entities in the knowledge graph",
+        "usage": "Used to add edges between nodes in a Neo4j knowledge graph",
+        "example": "create_relations_docker({relations: [{from: 'Entity1', to: 'Entity2', relationType: 'RELATES_TO'}]})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use active voice for relation types",
+          "Ensure entities exist before creating relations",
+          "Use consistent naming conventions for relation types"
+        ]
+      },
+      {
+        "name": "read_graph_docker",
+        "description": "Read the entire knowledge graph",
+        "usage": "Used to retrieve all nodes and relationships in the Neo4j knowledge graph",
+        "example": "read_graph_docker({})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use for small graphs or when a complete overview is needed",
+          "For large graphs, consider using search_nodes instead"
+        ]
+      },
+      {
+        "name": "search_nodes_docker",
+        "description": "Search for nodes in the knowledge graph based on a query",
+        "usage": "Used to find specific nodes in the Neo4j knowledge graph",
+        "example": "search_nodes_docker({query: 'search query'})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use specific search terms for better results",
+          "Search by entity name, type, or observation content"
+        ]
+      },
+      {
+        "name": "open_nodes_docker",
+        "description": "Open specific nodes in the knowledge graph by their names",
+        "usage": "Used to retrieve detailed information about specific nodes",
+        "example": "open_nodes_docker({names: ['Entity1', 'Entity2']})",
+        "bestPractices": [
+          "Always use with _docker suffix",
+          "Use when you know the exact entity names",
+          "Useful for getting detailed information about specific entities"
+        ]
+      }
     ],
     "keyComponents": [
       "Agent System: Modular framework with different agent types",
@@ -23,6 +151,26 @@
       "Voice System: Modular voice processing",
       "Configuration System: Centralized configuration management",
       "Notepad: Workspace for agents to store/retrieve information"
+    ],
+    "assistantTools": [
+      {
+        "name": "Docker",
+        "description": "Containerization platform for running tools and services",
+        "usage": "Used for running tools like search, fetch_content, and other services",
+        "commands": [
+          "search_docker: Search the web using DuckDuckGo",
+          "fetch_content_docker: Fetch and parse content from a webpage",
+          "search_wikipedia_docker: Search Wikipedia for articles",
+          "get_article_docker: Get full content of a Wikipedia article",
+          "get_summary_docker: Get summary of a Wikipedia article"
+        ],
+        "bestPractices": [
+          "Always specify the full tool name with _docker suffix",
+          "Check function parameters before calling",
+          "Handle errors gracefully if the tool fails",
+          "Use search before fetch_content to find relevant URLs"
+        ]
+      }
     ],
     "mentalModel": {
       "architecturalThinking": "Think of the system as a set of independent modules with clean interfaces that can evolve separately",
@@ -37,25 +185,37 @@
       "systemMetaphor": "Think of the application as a modular synthesizer where components can be connected in different ways to create complex behaviors"
     },
     "bestPractices": [
-      "Use Zod for schema validation and type guards in all files",
-      "Try to infer types when possible to reduce redundancy",
-      "Mark incomplete sections with TODO comments for easy identification",
-      "Ensure all imports are used and remove unused ones only if you're sure they're not needed this can cause issues with the build process",
-      "Verify all declared variables, constants, and functions are used, this makes sure all code is being used and helps catch potential bugs",
-      "Define clear interfaces before implementing components",
-      "Write tests for each component in isolation",
-      "Use dependency injection for flexible component composition",
-      "Document component interfaces and expected behaviors",
-      "Implement feature flags for gradual rollout of capabilities",
-      "Create examples that demonstrate component usage patterns",
+      "Use Zod for schema validation and type guards in all files to ensure type safety",
+      "Try to infer types when possible to reduce redundancy and maintenance burden",
+      "Mark incomplete sections with TODO comments for easy identification and future completion",
+      "Ensure all imports are used and remove unused ones only if you're sure they're not needed as this can cause issues with the build process",
+      "Verify all declared variables, constants, and functions are used to avoid dead code and potential bugs",
+      "Define clear interfaces before implementing components to ensure proper separation of concerns",
+      "Implement full functionality rather than mocks - avoid TODO placeholders in production code",
+      "Add proper error handling with try/catch blocks and fallback mechanisms for all external service calls",
+      "Implement graceful degradation when services are unavailable to maintain core functionality",
+      "Write comprehensive tests for each component in isolation before moving to the next component",
+      "Use dependency injection for flexible component composition and easier testing",
+      "Document component interfaces, expected behaviors, and error handling strategies",
+      "Implement feature flags for gradual rollout of capabilities and easier testing",
+      "Create examples that demonstrate component usage patterns for better developer experience",
       "Use TypeScript for type safety and better developer experience",
       "Establish consistent error handling patterns across components",
-      "Implement observability from the beginning (logging, metrics)",
-      "Use semantic versioning for all components"
+      "Use @mastra/core/logger for all logging instead of console.log for better observability",
+      "Structure logs with appropriate levels (debug, info, warn, error) for better filtering",
+      "Include context information in logs for better traceability and debugging",
+      "Use semantic versioning for all components",
+      "Prefer quality over quantity - it's better to have fewer well-implemented components than many incomplete ones",
+      "Take the time to build it right the first time rather than rushing and having to fix it later",
+      "Thoroughly understand third-party libraries and their APIs before implementing them",
+      "Use proper package-specific clients rather than generic implementations when available"
     ],
     "thingsToAvoid": [
+      "Mock implementations in production code - implement full functionality",
+      "Rushing implementation without understanding the APIs and libraries being used",
+      "Removing critical code or variables without understanding their purpose",
       "Unused imports or declared variables that aren't referenced",
-      "Incomplete implementations without TODO markers",
+      "Incomplete implementations without clear TODO markers",
       "Tight coupling between components that should be independent",
       "Monolithic implementations that are difficult to test and extend",
       "Premature optimization before establishing correct functionality",
@@ -65,24 +225,355 @@
       "Implicit dependencies that aren't clearly documented",
       "Global state that makes component behavior unpredictable",
       "Mixing business logic with infrastructure concerns",
-      "Inconsistent error handling across the application"
+      "Using console.log instead of the proper @mastra/core/logger",
+      "Inconsistent error handling across the application",
+      "Logging sensitive information or excessive data in production",
+      "Prioritizing quantity over quality - it's better to have fewer well-implemented components",
+      "Implementing components without proper error handling and fallback mechanisms",
+      "Using generic implementations when package-specific clients are available",
+      "Skipping tests to save time - this leads to more time spent debugging later",
+      "Ignoring type errors or using 'any' type to bypass TypeScript checks"
     ],
     "nextSteps": [
-      "Implement core components with minimal functionality",
-      "Create basic tests for each component",
-      "Start with a simple agent with memory and basic tools",
-      "Add capabilities incrementally based on specific use cases"
+      "Complete the Upstash Vector Store implementation with proper error handling",
+      "Implement the Xenova embeddings system with @xenova/transformers",
+      "Create a store-embeddings utility that combines embeddings and vector storage",
+      "Enhance the BaseAgent implementation with proper tool integration",
+      "Add Docker tools integration to the knowledge graph",
+      "Implement MCP tools integration for advanced context handling",
+      "Create comprehensive tests for each component",
+      "Build a simple agent that uses memory, embeddings, and basic tools",
+      "Add capabilities incrementally based on specific use cases",
+      "Document the implementation details and usage patterns"
     ],
     "completedTasks": [
       "Restructured llm.md to focus on modular architecture",
       "Updated llm.json to align with the foundation-first approach",
-      "Added notepad component for agent workspace"
+      "Added notepad component for agent workspace",
+      "Integrated data schema from data-schema.md",
+      "Implemented modular pattern with types and constants files",
+      "Replaced console.log with @mastra/core/logger for proper logging",
+      "Created BaseAgent implementation with Google AI integration",
+      "Implemented fully functional Upstash memory system with proper error handling",
+      "Integrated @mastra/upstash package for higher-level operations",
+      "Added fallback mechanisms for Upstash memory operations",
+      "Updated best practices to emphasize quality over quantity",
+      "Enhanced error handling patterns across components"
     ],
     "insights": [
       "Modular design with clean interfaces will make future extensions easier",
       "Starting with a minimal but well-structured foundation is better than implementing many features at once",
-      "The agent-memory-tool triad forms the core of the system, with other components enhancing functionality"
-    ]
+      "The agent-memory-tool triad forms the core of the system, with other components enhancing functionality",
+      "Proper logging is essential for debugging and monitoring in production",
+      "Quality over quantity is crucial - it's better to have fewer well-implemented components than many incomplete ones",
+      "Taking time to understand third-party libraries and their APIs before implementation saves time in the long run",
+      "Implementing proper error handling and fallback mechanisms is essential for robust applications",
+      "Using package-specific clients rather than generic implementations provides better type safety and functionality",
+      "Thoroughly testing each component before moving on to the next one ensures a solid foundation",
+      "Avoiding mock implementations in production code leads to more reliable applications",
+      "Ensuring all variables and imports are used prevents bugs and improves code quality"
+    ],
+    "logging": {
+      "levels": [
+        {
+          "name": "debug",
+          "description": "Detailed information for debugging purposes",
+          "usage": "Use for detailed flow information during development"
+        },
+        {
+          "name": "info",
+          "description": "General information about system operation",
+          "usage": "Use for tracking normal operations and state changes"
+        },
+        {
+          "name": "warn",
+          "description": "Warning conditions that don't cause errors",
+          "usage": "Use for potential issues that don't stop execution"
+        },
+        {
+          "name": "error",
+          "description": "Error conditions that affect operation",
+          "usage": "Use for exceptions and failures that impact functionality"
+        }
+      ],
+      "bestPractices": [
+        "Always use structured logging with context information",
+        "Log at appropriate levels based on severity and importance",
+        "Include relevant data but avoid sensitive information",
+        "Use logger.debug for development details that shouldn't clutter production logs",
+        "Use logger.info for normal operations that should be visible in production",
+        "Use logger.warn for potential issues that don't cause failures",
+        "Use logger.error for exceptions and failures with error details"
+      ]
+    }
+  },
+  "dataSchema": {
+    "messages": {
+      "fields": [
+        {
+          "name": "id",
+          "type": "uuidv4",
+          "constraints": ["PRIMARY KEY", "NOT NULL"],
+          "description": "Unique identifier for the message (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+        },
+        {
+          "name": "thread_id",
+          "type": "uuidv4",
+          "constraints": ["FOREIGN KEY → threads.id", "NOT NULL"],
+          "description": "Parent thread reference"
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Message content"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Enum of system | user | assistant | tool"
+        },
+        {
+          "name": "type",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Enum of text | tool-call | tool-result"
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Used for thread message ordering"
+        }
+      ]
+    },
+    "threads": {
+      "fields": [
+        {
+          "name": "id",
+          "type": "uuidv4",
+          "constraints": ["PRIMARY KEY", "NOT NULL"],
+          "description": "Unique identifier for the thread (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+        },
+        {
+          "name": "resourceId",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Primary identifier of the external resource this thread is associated with. Used to group and retrieve related threads."
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Title of the conversation thread"
+        },
+        {
+          "name": "metadata",
+          "type": "text",
+          "constraints": [],
+          "description": "Custom thread metadata as stringified JSON"
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Creation timestamp"
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Used for thread ordering history"
+        }
+      ]
+    },
+    "workflows": {
+      "fields": [
+        {
+          "name": "workflow_name",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Name of the workflow"
+        },
+        {
+          "name": "run_id",
+          "type": "uuidv4",
+          "constraints": ["NOT NULL"],
+          "description": "Unique identifier for the workflow execution. Used to track state across suspend/resume cycles"
+        },
+        {
+          "name": "snapshot",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Serialized workflow state as JSON"
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Creation timestamp"
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Last modification time, used to track state changes during workflow execution"
+        }
+      ]
+    },
+    "evalDataset": {
+      "fields": [
+        {
+          "name": "input",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Input provided to the agent"
+        },
+        {
+          "name": "output",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Output generated by the agent"
+        },
+        {
+          "name": "result",
+          "type": "jsonb",
+          "constraints": ["NOT NULL"],
+          "description": "Eval result data that includes score and details"
+        },
+        {
+          "name": "agent_name",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Name of the agent being evaluated"
+        },
+        {
+          "name": "metric_name",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "e.g Faithfulness, Hallucination, etc."
+        },
+        {
+          "name": "instructions",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "System prompt or instructions for the agent"
+        },
+        {
+          "name": "test_info",
+          "type": "jsonb",
+          "constraints": ["NOT NULL"],
+          "description": "Additional test metadata and configuration"
+        },
+        {
+          "name": "global_run_id",
+          "type": "uuidv4",
+          "constraints": ["NOT NULL"],
+          "description": "Groups related evaluation runs (e.g. all unit tests in a CI run)"
+        },
+        {
+          "name": "run_id",
+          "type": "uuidv4",
+          "constraints": ["NOT NULL"],
+          "description": "Unique identifier for the run being evaluated"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Creation timestamp"
+        }
+      ]
+    },
+    "traces": {
+      "fields": [
+        {
+          "name": "id",
+          "type": "text",
+          "constraints": ["PRIMARY KEY", "NOT NULL"],
+          "description": "Unique trace identifier"
+        },
+        {
+          "name": "parentSpanId",
+          "type": "text",
+          "constraints": [],
+          "description": "ID of the parent span. Null if span is top level"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Hierarchical operation name (e.g. workflow.myWorkflow.execute, http.request, database.query)"
+        },
+        {
+          "name": "traceId",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Root trace identifier that groups related spans"
+        },
+        {
+          "name": "scope",
+          "type": "text",
+          "constraints": ["NOT NULL"],
+          "description": "Library/package/service that created the span (e.g. @mastra/core, express, pg)"
+        },
+        {
+          "name": "kind",
+          "type": "integer",
+          "constraints": ["NOT NULL"],
+          "description": "INTERNAL (0, within process), CLIENT (1, outgoing calls), SERVER (2, incoming calls), PRODUCER (3, async job creation), CONSUMER (4, async job processing)"
+        },
+        {
+          "name": "attributes",
+          "type": "jsonb",
+          "constraints": [],
+          "description": "User defined key-value pairs that contain span metadata"
+        },
+        {
+          "name": "status",
+          "type": "jsonb",
+          "constraints": [],
+          "description": "JSON object with code (UNSET=0, ERROR=1, OK=2) and optional message"
+        },
+        {
+          "name": "events",
+          "type": "jsonb",
+          "constraints": [],
+          "description": "Time-stamped events that occurred during the span"
+        },
+        {
+          "name": "links",
+          "type": "jsonb",
+          "constraints": [],
+          "description": "Links to other related spans"
+        },
+        {
+          "name": "other",
+          "type": "text",
+          "constraints": [],
+          "description": "Additional OpenTelemetry span fields as stringified JSON"
+        },
+        {
+          "name": "startTime",
+          "type": "bigint",
+          "constraints": ["NOT NULL"],
+          "description": "Nanoseconds since Unix epoch when span started"
+        },
+        {
+          "name": "endTime",
+          "type": "bigint",
+          "constraints": ["NOT NULL"],
+          "description": "Nanoseconds since Unix epoch when span ended"
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "constraints": ["NOT NULL"],
+          "description": "Creation timestamp"
+        }
+      ]
+    }
   },
   "nodes": [
     {

@@ -34,7 +34,7 @@ importers:
         version: 0.48.0
       '@langchain/community':
         specifier: ^0.3.42
-        version: 0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.2)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)
+        version: 0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.2)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)
       '@langchain/core':
         specifier: ^0.3.55
         version: 0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))
@@ -239,6 +239,9 @@ importers:
       nanoid:
         specifier: ^5.1.5
         version: 5.1.5
+      neo4j-driver:
+        specifier: ^5.28.1
+        version: 5.28.1
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
@@ -288,6 +291,9 @@ importers:
       '@eslint/eslintrc':
         specifier: ^3.3.1
         version: 3.3.1
+      '@eslint/js':
+        specifier: ^9.26.0
+        version: 9.26.0
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -305,13 +311,16 @@ importers:
         version: 5.3.16
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.32.0
-        version: 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0)(typescript@5.8.3))(eslint@9.26.0)(typescript@5.8.3)
+        version: 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       '@typescript-eslint/parser':
         specifier: ^8.32.0
-        version: 8.32.0(eslint@9.26.0)(typescript@5.8.3)
+        version: 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       eslint:
         specifier: ^9.26.0
-        version: 9.26.0
+        version: 9.26.0(jiti@2.4.2)
+      jiti:
+        specifier: ^2.4.2
+        version: 2.4.2
       mastra:
         specifier: 0.6.3-alpha.1
         version: 0.6.3-alpha.1(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
@@ -320,7 +329,7 @@ importers:
         version: 5.8.3
       typescript-eslint:
         specifier: ^8.32.0
-        version: 8.32.0(eslint@9.26.0)(typescript@5.8.3)
+        version: 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
 
 packages:
 
@@ -6174,6 +6183,10 @@ packages:
   javascript-natural-sort@0.7.1:
     resolution: {integrity: sha512-nO6jcEfZWQXDhOiBtG2KvKyEptz7RVbpGP4vTD2hLBdmNQSsCiicO2Ioinv6UI4y9ukqnBpy+XZ9H6uLNgJTlw==}
 
+  jiti@2.4.2:
+    resolution: {integrity: sha512-rg9zJN+G4n2nfJl5MW3BMygZX56zKPNVEYYqq7adpmMh4Jn2QNEwhvQlFy6jPVdcod7txZtKHWnyZiA3a0zP7A==}
+    hasBin: true
+
   joplin-turndown-plugin-gfm@1.0.12:
     resolution: {integrity: sha512-qL4+1iycQjZ1fs8zk3jSRk7cg3ROBUHk7GKtiLAQLFzLPKErnILUvz5DLszSQvz3s1sTjPbywLDISVUtBY6HaA==}
 
@@ -6665,6 +6678,15 @@ packages:
   negotiator@1.0.0:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
+
+  neo4j-driver-bolt-connection@5.28.1:
+    resolution: {integrity: sha512-nY8GBhjOW7J0rDtpiyJn6kFdk2OiNVZZhZrO8//mwNXnf5VQJ6HqZQTDthH/9pEaX0Jvbastz1xU7ZL8xzqY0w==}
+
+  neo4j-driver-core@5.28.1:
+    resolution: {integrity: sha512-14vN8TlxC0JvJYfjWic5PwjsZ38loQLOKFTXwk4fWLTbCk6VhrhubB2Jsy9Rz+gM6PtTor4+6ClBEFDp1q/c8g==}
+
+  neo4j-driver@5.28.1:
+    resolution: {integrity: sha512-jbyBwyM0a3RLGcP43q3hIxPUPxA+1bE04RovOKdNAS42EtBMVCKcPSeOvWiHxgXp1ZFd0a8XqK+7LtguInOLUg==}
 
   neverthrow@7.2.0:
     resolution: {integrity: sha512-iGBUfFB7yPczHHtA8dksKTJ9E8TESNTAx1UQWW6TzMF280vo9jdPYpLUXrMN1BCkPdHFdNG3fxOt2CUad8KhAw==}
@@ -9017,9 +9039,9 @@ snapshots:
   '@esbuild/win32-x64@0.25.4':
     optional: true
 
-  '@eslint-community/eslint-utils@4.7.0(eslint@9.26.0)':
+  '@eslint-community/eslint-utils@4.7.0(eslint@9.26.0(jiti@2.4.2))':
     dependencies:
-      eslint: 9.26.0
+      eslint: 9.26.0(jiti@2.4.2)
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.1': {}
@@ -9611,7 +9633,7 @@ snapshots:
       '@lukeed/ms': 2.0.2
       bytes: 3.1.2
 
-  '@langchain/community@0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.2)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)':
+  '@langchain/community@0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.2)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4)
       '@ibm-cloud/watsonx-ai': 1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))
@@ -9646,6 +9668,7 @@ snapshots:
       jsonwebtoken: 9.0.2
       lodash: 4.17.21
       mammoth: 1.9.0
+      neo4j-driver: 5.28.1
       pdf-parse: 1.1.1
       pg: 8.15.6
       playwright: 1.52.0
@@ -13522,15 +13545,15 @@ snapshots:
     dependencies:
       '@types/node': 22.15.17
 
-  '@typescript-eslint/eslint-plugin@8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0)(typescript@5.8.3))(eslint@9.26.0)(typescript@5.8.3)':
+  '@typescript-eslint/eslint-plugin@8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.1
-      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
+      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       '@typescript-eslint/scope-manager': 8.32.0
-      '@typescript-eslint/type-utils': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
+      '@typescript-eslint/type-utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       '@typescript-eslint/visitor-keys': 8.32.0
-      eslint: 9.26.0
+      eslint: 9.26.0(jiti@2.4.2)
       graphemer: 1.4.0
       ignore: 5.3.2
       natural-compare: 1.4.0
@@ -13539,14 +13562,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.32.0(eslint@9.26.0)(typescript@5.8.3)':
+  '@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
       '@typescript-eslint/scope-manager': 8.32.0
       '@typescript-eslint/types': 8.32.0
       '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
       '@typescript-eslint/visitor-keys': 8.32.0
       debug: 4.4.0(supports-color@8.1.1)
-      eslint: 9.26.0
+      eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
@@ -13556,12 +13579,12 @@ snapshots:
       '@typescript-eslint/types': 8.32.0
       '@typescript-eslint/visitor-keys': 8.32.0
 
-  '@typescript-eslint/type-utils@8.32.0(eslint@9.26.0)(typescript@5.8.3)':
+  '@typescript-eslint/type-utils@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
       '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       debug: 4.4.0(supports-color@8.1.1)
-      eslint: 9.26.0
+      eslint: 9.26.0(jiti@2.4.2)
       ts-api-utils: 2.1.0(typescript@5.8.3)
       typescript: 5.8.3
     transitivePeerDependencies:
@@ -13583,13 +13606,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.32.0(eslint@9.26.0)(typescript@5.8.3)':
+  '@typescript-eslint/utils@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
-      '@eslint-community/eslint-utils': 4.7.0(eslint@9.26.0)
+      '@eslint-community/eslint-utils': 4.7.0(eslint@9.26.0(jiti@2.4.2))
       '@typescript-eslint/scope-manager': 8.32.0
       '@typescript-eslint/types': 8.32.0
       '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
-      eslint: 9.26.0
+      eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
@@ -14650,9 +14673,9 @@ snapshots:
 
   eslint-visitor-keys@4.2.0: {}
 
-  eslint@9.26.0:
+  eslint@9.26.0(jiti@2.4.2):
     dependencies:
-      '@eslint-community/eslint-utils': 4.7.0(eslint@9.26.0)
+      '@eslint-community/eslint-utils': 4.7.0(eslint@9.26.0(jiti@2.4.2))
       '@eslint-community/regexpp': 4.12.1
       '@eslint/config-array': 0.20.0
       '@eslint/config-helpers': 0.2.2
@@ -14689,6 +14712,8 @@ snapshots:
       natural-compare: 1.4.0
       optionator: 0.9.4
       zod: 3.24.4
+    optionalDependencies:
+      jiti: 2.4.2
     transitivePeerDependencies:
       - supports-color
 
@@ -15493,6 +15518,8 @@ snapshots:
 
   javascript-natural-sort@0.7.1: {}
 
+  jiti@2.4.2: {}
+
   joplin-turndown-plugin-gfm@1.0.12: {}
 
   jose@5.10.0: {}
@@ -16031,6 +16058,20 @@ snapshots:
   natural-compare@1.4.0: {}
 
   negotiator@1.0.0: {}
+
+  neo4j-driver-bolt-connection@5.28.1:
+    dependencies:
+      buffer: 6.0.3
+      neo4j-driver-core: 5.28.1
+      string_decoder: 1.3.0
+
+  neo4j-driver-core@5.28.1: {}
+
+  neo4j-driver@5.28.1:
+    dependencies:
+      neo4j-driver-bolt-connection: 5.28.1
+      neo4j-driver-core: 5.28.1
+      rxjs: 7.8.2
 
   neverthrow@7.2.0: {}
 
@@ -17339,12 +17380,12 @@ snapshots:
 
   typed-function@4.2.1: {}
 
-  typescript-eslint@8.32.0(eslint@9.26.0)(typescript@5.8.3):
+  typescript-eslint@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0)(typescript@5.8.3))(eslint@9.26.0)(typescript@5.8.3)
-      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0)(typescript@5.8.3)
-      eslint: 9.26.0
+      '@typescript-eslint/eslint-plugin': 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color

@@ -81,13 +81,13 @@ Each component is designed to be:
     constructor(config: AgentConfig) {
       // Validate configuration
       const validatedConfig = AgentConfigSchema.parse(config);
-      
+
       this.tools = new ToolRegistry();
-      
+
       if (validatedConfig.memory) {
         this.memory = validatedConfig.memory;
       }
-      
+
       this.agent = new Agent({
         name: validatedConfig.name,
         instructions: validatedConfig.instructions,
@@ -117,87 +117,118 @@ Each component is designed to be:
   - `memory.ts`: Memory interface and factory
   - `upstashMemory.ts`: Upstash Redis implementation
   - `localMemory.ts`: Local storage implementation for development
+  - `types.ts`: Type definitions and schemas
+  - `constants.ts`: Constants and default values
 - **Data Schema**: See [data-schema.md](data-schema.md) for the complete schema definitions
 - **Implementation**:
 
   ```typescript
-  import { z } from "zod";
-  import { v4 as uuidv4 } from "uuid";
+  // memory.ts - Base Memory class
+  import { v4 as uuidv4 } from 'uuid';
+  import { MemoryConfig, MemoryConfigSchema, MessageRole, MessageType } from './types';
+  import { logger } from '../index';
 
-  // Memory configuration schema
-  const MemoryConfigSchema = z.object({
-    provider: z.enum(["upstash", "local"]),
-    options: z.record(z.any()).optional(),
-  });
-
-  // Infer the type from the schema
-  export type MemoryConfig = z.infer<typeof MemoryConfigSchema>;
-
+  /**
+   * Memory class for storing and retrieving conversation history
+   */
   export class Memory {
-    private instance;
-    
+    private instance: any;
+
+    /**
+     * Create a new Memory instance
+     * @param config - Configuration for the memory system
+     */
     constructor(config: MemoryConfig) {
       // Validate configuration
       const validatedConfig = MemoryConfigSchema.parse(config);
-      this.instance = this.createMemoryInstance(validatedConfig);
-    }
-    
-    private createMemoryInstance(config: MemoryConfig) {
-      switch (config.provider) {
-        case "upstash":
-          return this.createUpstashMemory(config.options);
-        case "local":
-          return this.createLocalMemory(config.options);
+
+      // Log memory initialization
+      logger.info(`Initializing memory with provider: ${validatedConfig.provider}`);
+
+      // Create the appropriate memory instance based on the provider
+      switch (validatedConfig.provider) {
+        case 'upstash':
+          this.instance = this.createUpstashMemory(validatedConfig.options);
+          break;
+        case 'local':
+          this.instance = this.createLocalMemory(validatedConfig.options);
+          break;
         default:
-          // This should never happen due to zod validation
-          throw new Error(`Unsupported memory provider: ${config.provider}`);
+          logger.error(`Unsupported memory provider: ${validatedConfig.provider}`);
+          throw new Error(`Unsupported memory provider: ${validatedConfig.provider}`);
       }
     }
-    
+
+    /**
+     * Create an Upstash Redis memory instance
+     * @param options - Options for the Upstash Redis memory
+     * @returns An Upstash Redis memory instance
+     */
     private createUpstashMemory(options?: Record<string, any>) {
-      const { Memory } = require("@mastra/memory");
-      const { UpstashStore } = require("@mastra/memory/upstash");
-      
-      return new Memory({
-        storage: new UpstashStore({
-          url: options?.url || process.env.UPSTASH_REDIS_REST_URL,
-          token: options?.token || process.env.UPSTASH_REDIS_REST_TOKEN,
-        })
+      logger.info(`Creating Upstash memory with options: ${JSON.stringify(options)}`);
+
+      // Import the UpstashMemory class
+      const { UpstashMemory } = require('./upstashMemory');
+
+      // Create and return a new UpstashMemory instance
+      return new UpstashMemory({
+        url: options?.url || process.env.UPSTASH_REDIS_REST_URL,
+        token: options?.token || process.env.UPSTASH_REDIS_REST_TOKEN,
+        prefix: options?.prefix || 'mastra:'
       });
     }
-    
+
+    /**
+     * Create a local memory instance
+     * @param options - Options for the local memory
+     * @returns A local memory instance
+     */
     private createLocalMemory(options?: Record<string, any>) {
-      const { Memory } = require("@mastra/memory");
-      const { LocalStore } = require("@mastra/memory/local");
-      
-      return new Memory({
-        storage: new LocalStore({
-          path: options?.path || "./data/memory",
-        })
-      });
+      // TODO: Implement local memory
+      logger.info(`Creating Local memory with options: ${JSON.stringify(options)}`);
+
+      // For now, return a mock implementation
+      return {
+        storage: {
+          set: async (key: string, value: string) => {
+            logger.debug(`[Local] Setting ${key} with value length: ${value.length}`);
+            return true;
+          },
+          get: async (key: string) => {
+            logger.debug(`[Local] Getting ${key}`);
+            return null;
+          },
+          lpush: async (key: string, value: string) => {
+            logger.debug(`[Local] Pushing ${value} to ${key}`);
+            return true;
+          },
+          lrange: async (key: string, start: number, end: number) => {
+            logger.debug(`[Local] Getting range ${start}-${end} from ${key}`);
+            return [];
+          }
+        }
+      };
     }
-    
+
+    /**
+     * Get the memory instance
+     * @returns The memory instance
+     */
     getMemoryInstance() {
       return this.instance;
     }
 
-    async createThread(resourceId: string, title: string, metadata: Record<string, any> = {}) {
-      const thread = {
-        id: uuidv4(),
-        resourceId,
-        title,
-        metadata: JSON.stringify(metadata),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      // Store thread in database
-      await this.instance.storage.set(`thread:${thread.id}`, JSON.stringify(thread));
-      
-      return thread;
-    }
+    /**
+     * Add a message to the memory
+     * @param threadId - ID of the thread
+     * @param content - Content of the message
+     * @param role - Role of the message sender
+     * @param type - Type of the message
+     * @returns The created message
+     */
+    async addMessage(threadId: string, content: string, role: MessageRole, type: MessageType) {
+      logger.info(`Adding message to thread ${threadId} with role ${role} and type ${type}`);
 
-    async addMessage(threadId: string, content: string, role: 'system' | 'user' | 'assistant' | 'tool', type: 'text' | 'tool-call' | 'tool-result') {
       const message = {
         id: uuidv4(),
         thread_id: threadId,
@@ -206,30 +237,290 @@ Each component is designed to be:
         type,
         createdAt: new Date()
       };
-      
+
       // Store message in database
       await this.instance.storage.set(`message:${message.id}`, JSON.stringify(message));
-      
+
       // Add message to thread's message list
       await this.instance.storage.lpush(`thread:${threadId}:messages`, message.id);
-      
+
+      logger.debug(`Message ${message.id} added to thread ${threadId}`);
       return message;
     }
 
-    async getThreadMessages(threadId: string, limit = 10) {
-      // Get message IDs from thread's message list
+    /**
+     * Get messages from a thread
+     * @param threadId - ID of the thread
+     * @param limit - Maximum number of messages to retrieve
+     * @returns Array of messages
+     */
+    async getMessages(threadId: string, limit = 10) {
+      logger.info(`Getting messages from thread ${threadId} with limit ${limit}`);
+
+      // Get message IDs from thread
       const messageIds = await this.instance.storage.lrange(`thread:${threadId}:messages`, 0, limit - 1);
-      
-      // Get messages by IDs
+      logger.debug(`Found ${messageIds.length} message IDs for thread ${threadId}`);
+
+      // Get message content for each ID
       const messages = [];
       for (const messageId of messageIds) {
         const messageJson = await this.instance.storage.get(`message:${messageId}`);
         if (messageJson) {
           messages.push(JSON.parse(messageJson));
+        } else {
+          logger.warn(`Message ${messageId} not found for thread ${threadId}`);
         }
       }
-      
+
+      logger.debug(`Retrieved ${messages.length} messages for thread ${threadId}`);
       return messages;
+    }
+
+    /**
+     * Create a new thread
+     * @returns The created thread ID
+     */
+    async createThread() {
+      const threadId = uuidv4();
+      logger.info(`Creating new thread with ID ${threadId}`);
+
+      await this.instance.storage.set(`thread:${threadId}:created`, new Date().toISOString());
+
+      logger.debug(`Thread ${threadId} created successfully`);
+      return threadId;
+    }
+  }
+  ```
+
+  ```typescript
+  // upstashMemory.ts - Upstash Redis implementation
+  import { z } from 'zod';
+  import { v4 as uuidv4 } from 'uuid';
+  import { Redis } from '@upstash/redis';
+  import { UpstashStore } from '@mastra/upstash';
+  import { Memory } from './memory';
+  import { MessageRole, MessageType, Storage } from './types';
+  import { logger } from '../index';
+
+  // Define the Upstash memory configuration schema
+  export const UpstashMemoryConfigSchema = z.object({
+    url: z.string(),
+    token: z.string(),
+    prefix: z.string().optional(),
+  });
+
+  // Export the type from the schema
+  export type UpstashMemoryConfig = z.infer<typeof UpstashMemoryConfigSchema>;
+
+  /**
+   * UpstashMemory class for storing and retrieving conversation history in Upstash Redis
+   */
+  export class UpstashMemory extends Memory {
+    private url: string;
+    private token: string;
+    private prefix: string;
+    private redis: Redis;
+    private upstashStore: UpstashStore;
+    private storage: Storage;
+
+    /**
+     * Create a new UpstashMemory instance
+     * @param config - Configuration for the Upstash memory
+     */
+    constructor(config: UpstashMemoryConfig) {
+      super({
+        provider: 'upstash',
+        options: config,
+      });
+
+      // Validate configuration
+      const validatedConfig = UpstashMemoryConfigSchema.parse(config);
+
+      this.url = validatedConfig.url;
+      this.token = validatedConfig.token;
+      this.prefix = validatedConfig.prefix || 'mastra:';
+
+      // Initialize Upstash Redis client
+      logger.info(`Initializing Upstash Redis client with URL: ${this.url}`);
+      this.redis = new Redis({
+        url: this.url,
+        token: this.token,
+      });
+
+      // Initialize Upstash Store from Mastra
+      this.upstashStore = new UpstashStore({
+        url: this.url,
+        token: this.token,
+      });
+
+      // Create storage interface that uses both UpstashStore and direct Redis client
+      // We use direct Redis client for all operations since UpstashStore doesn't have
+      // direct key-value methods but is used for higher-level operations
+      this.storage = {
+        set: async (key: string, value: string) => {
+          logger.debug(`[Upstash] Setting ${this.prefix}${key}`);
+          // Use direct Redis client for key-value operations
+          await this.redis.set(`${this.prefix}${key}`, value);
+          return true;
+        },
+        get: async (key: string) => {
+          logger.debug(`[Upstash] Getting ${this.prefix}${key}`);
+          // Use direct Redis client for key-value operations
+          const result = await this.redis.get(`${this.prefix}${key}`);
+          return result as string | null;
+        },
+        lpush: async (key: string, value: string) => {
+          logger.debug(`[Upstash] Pushing to ${this.prefix}${key}`);
+          // Use direct Redis client for list operations
+          await this.redis.lpush(`${this.prefix}${key}`, value);
+          return true;
+        },
+        lrange: async (key: string, start: number, end: number) => {
+          logger.debug(`[Upstash] Getting range ${start}-${end} from ${this.prefix}${key}`);
+          // Use direct Redis client for list range operations
+          const result = await this.redis.lrange(`${this.prefix}${key}`, start, end);
+          return result as string[];
+        }
+      };
+    }
+
+    /**
+     * Add a message to the memory
+     * @param threadId - ID of the thread
+     * @param content - Content of the message
+     * @param role - Role of the message sender
+     * @param type - Type of the message
+     * @returns The created message
+     */
+    async addMessage(threadId: string, content: string, role: MessageRole, type: MessageType) {
+      const message = {
+        id: uuidv4(),
+        thread_id: threadId,
+        content,
+        role,
+        type,
+        createdAt: new Date()
+      };
+
+      // Store message in database with prefix
+      await this.storage.set(`message:${message.id}`, JSON.stringify(message));
+
+      // Add message to thread's message list with prefix
+      await this.storage.lpush(`thread:${threadId}:messages`, message.id);
+
+      return message;
+    }
+
+    /**
+     * Get messages from a thread
+     * @param threadId - ID of the thread
+     * @param limit - Maximum number of messages to retrieve
+     * @returns Array of messages
+     */
+    async getMessages(threadId: string, limit = 10) {
+      // Get message IDs from thread with prefix
+      const messageIds = await this.storage.lrange(`thread:${threadId}:messages`, 0, limit - 1);
+
+      // Get message content for each ID with prefix
+      const messages = [];
+      for (const messageId of messageIds) {
+        const messageJson = await this.storage.get(`message:${messageId}`);
+        if (messageJson) {
+          messages.push(JSON.parse(messageJson));
+        }
+      }
+
+      return messages;
+    }
+
+    /**
+     * Create a new thread
+     * @returns The created thread ID
+     */
+    async createThread() {
+      const threadId = uuidv4();
+      await this.storage.set(`thread:${threadId}:created`, new Date().toISOString());
+      return threadId;
+    }
+
+    /**
+     * Save thread metadata using UpstashStore
+     * This method demonstrates how to use the UpstashStore for higher-level operations
+     * @param threadId - ID of the thread
+     * @param resourceId - Resource ID (user ID or other identifier)
+     * @param metadata - Metadata to save
+     */
+    async saveThreadMetadata(threadId: string, resourceId: string, metadata: Record<string, any>) {
+      logger.info(`Saving metadata for thread ${threadId}`);
+
+      // Create a thread object in the format expected by UpstashStore
+      const now = new Date();
+      const thread = {
+        id: threadId,
+        resourceId,
+        createdAt: now,
+        updatedAt: now,
+        metadata
+      };
+
+      try {
+        // Use the UpstashStore to save the thread
+        // We're using a try-catch block because the UpstashStore might have additional requirements
+        // that we're not aware of from our limited inspection of the code
+        await this.upstashStore.saveThread({ thread });
+        logger.debug(`Metadata saved for thread ${threadId}`);
+        return thread;
+      } catch (error) {
+        // If the UpstashStore method fails, fall back to using the Redis client directly
+        logger.warn(`Failed to save thread metadata using UpstashStore: ${error}. Falling back to direct Redis.`);
+        const threadKey = `${this.prefix}thread:${threadId}:metadata`;
+        await this.redis.set(threadKey, JSON.stringify(metadata));
+        logger.debug(`Metadata saved for thread ${threadId} using direct Redis`);
+        return thread;
+      }
+    }
+
+    /**
+     * Get thread metadata using UpstashStore
+     * This method demonstrates how to use the UpstashStore for higher-level operations
+     * @param threadId - ID of the thread
+     * @returns Thread metadata or null if not found
+     */
+    async getThreadMetadata(threadId: string) {
+      logger.info(`Getting metadata for thread ${threadId}`);
+
+      try {
+        // Use the UpstashStore to get the thread
+        const thread = await this.upstashStore.getThreadById({ threadId });
+
+        if (thread) {
+          logger.debug(`Metadata retrieved for thread ${threadId}`);
+          return thread.metadata || {};
+        }
+
+        logger.debug(`No thread found with ID ${threadId}`);
+        return null;
+      } catch (error) {
+        // If the UpstashStore method fails, fall back to using the Redis client directly
+        logger.warn(`Failed to get thread metadata using UpstashStore: ${error}. Falling back to direct Redis.`);
+
+        const threadKey = `${this.prefix}thread:${threadId}:metadata`;
+        const metadata = await this.redis.get(threadKey);
+
+        if (metadata) {
+          try {
+            const parsedMetadata = JSON.parse(metadata as string);
+            logger.debug(`Metadata retrieved for thread ${threadId} using direct Redis`);
+            return parsedMetadata;
+          } catch (parseError) {
+            logger.error(`Failed to parse thread metadata: ${parseError}`);
+            return null;
+          }
+        }
+
+        logger.debug(`No metadata found for thread ${threadId}`);
+        return null;
+      }
     }
   }
   ```
@@ -251,7 +542,7 @@ Each component is designed to be:
   export class ToolRegistry {
     private tools: Map<string, any> = new Map();
     private enabledTools: Set<string> = new Set();
-    
+
     register(tool: any) {
       if (!tool.name) {
         throw new Error("Tool must have a name property");
@@ -261,7 +552,7 @@ Each component is designed to be:
       this.enabledTools.add(tool.name);
       return this;
     }
-    
+
     enable(toolName: string) {
       if (this.tools.has(toolName)) {
         this.enabledTools.add(toolName);
@@ -270,18 +561,18 @@ Each component is designed to be:
       }
       return this;
     }
-    
+
     disable(toolName: string) {
       this.enabledTools.delete(toolName);
       return this;
     }
-    
+
     getEnabledTools() {
       return Array.from(this.enabledTools)
         .map(name => this.tools.get(name))
         .filter(Boolean);
     }
-    
+
     getAllTools() {
       return Array.from(this.tools.values());
     }
@@ -319,19 +610,19 @@ Each component is designed to be:
       execute: async (params: unknown) => {
         // Validate parameters
         const { query, limit } = BraveSearchParamsSchema.parse(params);
-        
+
         const apiKey = config?.apiKey || process.env.BRAVE_API_KEY;
         if (!apiKey) {
           throw new Error("Brave API key is required");
         }
-        
+
         // TODO: Implement Brave search API call
         // For now, return mock results
         const results = [
           { title: "Result 1", url: "https://example.com/1", snippet: "This is the first result" },
           { title: "Result 2", url: "https://example.com/2", snippet: "This is the second result" },
         ].slice(0, limit);
-        
+
         return results;
       }
     };
@@ -363,13 +654,13 @@ Each component is designed to be:
 
   export class EmbeddingProvider {
     private provider;
-    
+
     constructor(config: EmbeddingConfig) {
       // Validate configuration
       const validatedConfig = EmbeddingConfigSchema.parse(config);
       this.provider = this.createProvider(validatedConfig);
     }
-    
+
     private createProvider(config: EmbeddingConfig) {
       switch (config.provider) {
         case "gemini":
@@ -381,17 +672,17 @@ Each component is designed to be:
           throw new Error(`Unsupported embedding provider: ${config.provider}`);
       }
     }
-    
+
     private createGeminiProvider(options?: Record<string, any>) {
       // TODO: Implement Gemini embedding provider
       throw new Error("Gemini embedding provider not implemented yet");
     }
-    
+
     private createLocalProvider(options?: Record<string, any>) {
       // TODO: Implement local embedding provider
       throw new Error("Local embedding provider not implemented yet");
     }
-    
+
     async embed(text: string): Promise<number[]> {
       return this.provider.embed(text);
     }
@@ -411,30 +702,130 @@ Each component is designed to be:
 
   ```typescript
   import { StateGraph, END } from "@langchain/langgraph";
+  import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+  import { EmbeddingProvider } from "../embeddings/embeddingProvider";
+  import { VectorStore } from "../knowledge/vectorStore";
+  import { z } from "zod";
 
-  export class WorkflowBuilder<T> {
-    private graph: StateGraph<T>;
-    private nodes: Map<string, Function> = new Map();
-    private edges: Array<[string, string]> = [];
-    
-    constructor(channels: Record<string, any>) {
-      this.graph = new StateGraph<T>({ channels });
+  // RAG workflow configuration schema
+  const RAGWorkflowConfigSchema = z.object({
+    modelName: z.string().optional().default("gemini-2.5-pro-preview-05-06"),
+    embeddingProvider: z.instanceof(EmbeddingProvider),
+    vectorStore: z.instanceof(VectorStore),
+    topK: z.number().optional().default(5),
+    contextTemplate: z.string().optional().default("Context information:\n{{context}}\n\nQuestion: {{query}}"),
+    reranking: z.boolean().optional().default(false),
+  });
+
+  // Infer the type from the schema
+  export type RAGWorkflowConfig = z.infer<typeof RAGWorkflowConfigSchema>;
+
+  // Define state type
+  type RAGState = {
+    query: string;
+    context?: string;
+    response?: string;
+  };
+
+  export class RAGWorkflow {
+    private workflow;
+    private embeddingProvider: EmbeddingProvider;
+    private vectorStore: VectorStore;
+    private model: ChatGoogleGenerativeAI;
+    private topK: number;
+    private contextTemplate: string;
+    private reranking: boolean;
+
+    constructor(config: RAGWorkflowConfig) {
+      // Validate configuration
+      const validatedConfig = RAGWorkflowConfigSchema.parse(config);
+
+      this.embeddingProvider = validatedConfig.embeddingProvider;
+      this.vectorStore = validatedConfig.vectorStore;
+      this.topK = validatedConfig.topK;
+      this.contextTemplate = validatedConfig.contextTemplate;
+      this.reranking = validatedConfig.reranking;
+
+      this.model = new ChatGoogleGenerativeAI({
+        modelName: validatedConfig.modelName,
+        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+      });
+
+      this.workflow = this.buildWorkflow();
     }
-    
-    addNode(name: string, handler: Function) {
-      this.nodes.set(name, handler);
-      this.graph.addNode(name, handler);
-      return this;
+
+    private buildWorkflow() {
+      const workflow = new StateGraph<RAGState>({
+        channels: {
+          query: { value: "" },
+          context: { value: undefined },
+          response: { value: undefined }
+        }
+      });
+
+      // Add retriever node
+      workflow.addNode("retriever", this.retrieverNode.bind(this));
+
+      // Add generator node
+      workflow.addNode("generator", this.generatorNode.bind(this));
+
+      // Define edges
+      workflow.addEdge("retriever", "generator");
+      workflow.addEdge("generator", END);
+
+      return workflow.compile();
     }
-    
-    addEdge(from: string, to: string) {
-      this.edges.push([from, to]);
-      this.graph.addEdge(from, to === "END" ? END : to);
-      return this;
+
+    private async retrieverNode(state: RAGState) {
+      // Embed the query
+      const queryEmbedding = await this.embeddingProvider.embed(state.query);
+
+      // Retrieve relevant documents
+      const results = await this.vectorStore.query(queryEmbedding, {
+        topK: this.topK,
+        includeMetadata: true
+      });
+
+      // Format context
+      const context = results.map(doc => doc.metadata?.text || "").join("\n\n");
+
+      return { context };
     }
-    
-    build() {
-      return this.graph.compile();
+
+    private async generatorNode(state: RAGState) {
+      // Generate response using context
+      const prompt = this.contextTemplate
+        .replace("{{context}}", state.context || "No context available.")
+        .replace("{{query}}", state.query);
+
+      const response = await this.model.invoke(prompt);
+
+      return { response: response.content };
+    }
+
+    async invoke(query: string) {
+      return this.workflow.invoke({ query });
+    }
+
+    asTool() {
+      return {
+        name: "ragSearch",
+        description: "Search for information in the knowledge base",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The search query"
+            }
+          },
+          required: ["query"]
+        },
+        execute: async (params: { query: string }) => {
+          const result = await this.invoke(params.query);
+          return result.response;
+        }
+      };
     }
   }
   ```
@@ -465,13 +856,13 @@ Each component is designed to be:
 
   export class VectorStore {
     private store;
-    
+
     constructor(config: VectorStoreConfig) {
       // Validate configuration
       const validatedConfig = VectorStoreConfigSchema.parse(config);
       this.store = this.createStore(validatedConfig);
     }
-    
+
     private createStore(config: VectorStoreConfig) {
       switch (config.provider) {
         case "upstash":
@@ -483,21 +874,32 @@ Each component is designed to be:
           throw new Error(`Unsupported vector store provider: ${config.provider}`);
       }
     }
-    
+
     private createUpstashStore(options?: Record<string, any>) {
-      // TODO: Implement Upstash vector store
-      throw new Error("Upstash vector store not implemented yet");
+      const { UpstashVector } = require("@upstash/vector");
+
+      return new UpstashVector({
+        url: options?.url || process.env.UPSTASH_VECTOR_REST_URL,
+        token: options?.token || process.env.UPSTASH_VECTOR_REST_TOKEN,
+      });
     }
-    
+
     private createLocalStore(options?: Record<string, any>) {
       // TODO: Implement local vector store
       throw new Error("Local vector store not implemented yet");
     }
-    
+
     async query(vector: number[], options?: Record<string, any>) {
-      return this.store.query(vector, options);
+      return this.store.query({
+        vector,
+        topK: options?.topK || 5,
+        includeMetadata: options?.includeMetadata !== false,
+        includeVectors: options?.includeVectors || false,
+        filter: options?.filter,
+        namespace: options?.namespace || "default"
+      });
     }
-    
+
     async upsert(documents: Array<Record<string, any>>) {
       return this.store.upsert(documents);
     }
@@ -529,7 +931,7 @@ Each component is designed to be:
 
   export class VoiceProvider {
     private provider;
-    
+
     constructor(config: VoiceConfig)
   ```
 
@@ -552,33 +954,33 @@ Each component is designed to be:
   export class Config {
     private static instance: Config;
     private config: Record<string, any>;
-    
+
     private constructor() {
       this.config = this.loadConfig();
     }
-    
+
     static getInstance() {
       if (!Config.instance) {
         Config.instance = new Config();
       }
       return Config.instance;
     }
-    
+
     private loadConfig() {
       // Load from environment, files, etc.
       const config = { ...defaultConfig };
-      
+
       // Override with environment variables
       // Override with config files
-      
+
       // Validate
       return configSchema.parse(config);
     }
-    
+
     get(path: string) {
       // Get config value by path
     }
-    
+
     getAll() {
       return this.config;
     }
@@ -700,13 +1102,13 @@ const workflow = new WorkflowBuilder<RAGState>({
 workflow.addNode("retriever", async (state) => {
   // Embed the query
   const queryEmbedding = await embeddings.embed(state.query);
-  
+
   // Retrieve relevant documents
   const results = await vectorStore.query(queryEmbedding, { topK: 5 });
-  
+
   // Format context
   const context = results.map(doc => doc.text).join("\n\n");
-  
+
   return { context };
 });
 
@@ -714,16 +1116,16 @@ workflow.addNode("generator", async (state) => {
   // Generate response using context
   const prompt = `
     Answer the following question based on the provided context.
-    
+
     Context:
     ${state.context || "No context available."}
-    
+
     Question:
     ${state.query}
   `;
-  
+
   const response = await model.invoke(prompt);
-  
+
   return { response: response.content };
 });
 
