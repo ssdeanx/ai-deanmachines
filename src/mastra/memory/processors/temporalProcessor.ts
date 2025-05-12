@@ -4,8 +4,9 @@
  * This processor organizes and filters messages based on time-related criteria,
  * such as recency, time windows, and temporal relevance.
  */
-
-import { Message, MemoryProcessor, MessageRole, MessageType } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the TemporalProcessor processor

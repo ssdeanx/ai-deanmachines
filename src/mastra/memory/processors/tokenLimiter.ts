@@ -4,8 +4,9 @@
  * This processor counts tokens in retrieved memory messages and removes
  * oldest messages until the total count is below a specified limit.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the TokenLimiter processor

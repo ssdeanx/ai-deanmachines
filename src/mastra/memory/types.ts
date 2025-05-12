@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 import { BaseConfigSchema } from '../types';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
+import { Message as CoreMessage } from 'ai';
 
 /**
  * Semantic recall configuration schema
@@ -35,11 +37,14 @@ export const WorkingMemoryConfigSchema = z.object({
 export type WorkingMemoryConfig = z.infer<typeof WorkingMemoryConfigSchema>;
 
 /**
- * Memory processor interface
+ * Re-export types from @mastra/core/memory and 'ai'
+ * for backward compatibility and proper processor implementation
  */
-export interface MemoryProcessor {
-  process(messages: Message[]): Message[];
-}
+export { MemoryProcessor };
+export type { MemoryProcessorOpts, CoreMessage };
+
+// Type adapter to make Message compatible with CoreMessage
+export type MessageOrCoreMessage = Message | CoreMessage;
 
 /**
  * Memory configuration schema
@@ -136,9 +141,7 @@ export interface Storage {
 }
 
 /**
- * Memory processor interface
+ * Memory processor interface alias
  * Processors modify messages before they are sent to the LLM
  */
-export interface MemoryProcessor {
-  process(messages: Message[]): Message[];
-}
+export type IMemoryProcessor = MemoryProcessor;

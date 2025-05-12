@@ -4,8 +4,9 @@
  * This processor summarizes long conversation histories to reduce token usage
  * while preserving the most important context.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the ContextualSummarizer processor

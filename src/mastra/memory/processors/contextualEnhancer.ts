@@ -5,8 +5,9 @@
  * It can be used to add relevant information, cross-references, and semantic connections
  * to improve the quality and coherence of agent responses.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the ContextualEnhancer processor
@@ -21,9 +22,9 @@ const logger = createLogger({
 export type EnhancementFunction = (message: Message, context: EnhancementContext) => Message;
 
 /**
- * Type for context source function
+ * Type for context source function - changed to synchronous to comply with MemoryProcessor interface
  */
-export type ContextSourceFunction = (message: Message) => Promise<Record<string, any>>;
+export type ContextSourceFunction = (message: Message) => Record<string, any>;
 
 /**
  * Enhancement context interface
@@ -127,45 +128,42 @@ export class ContextualEnhancer implements MemoryProcessor {
       let enhancedMessage = { ...message };
 
       try {
-        // Gather context from sources (using cached data only)
+        // Gather context from sources (using cached data and synchronous calls)
         const sources: Record<string, any> = {};
 
         for (const sourceFunction of this.contextSources) {
           try {
             // Check cache first if enabled
-            const cacheKey = `${message.id}:${sourceFunction.name}`;
+            const cacheKey = `${message.id}:${sourceFunction.name || 'anonymous'}`;
 
             if (this.cacheContext && this.contextCache.has(cacheKey)) {
               const cachedContext = this.contextCache.get(cacheKey);
               if (cachedContext) {
                 Object.assign(sources, cachedContext);
-                logger.debug(`Using cached context for message ${message.id} from source ${sourceFunction.name}`);
+                logger.debug(`Using cached context for message ${message.id} from source ${sourceFunction.name || 'anonymous'}`);
                 continue;
               }
             }
 
-            // For non-cached data, schedule async fetch for next time
-            // This is a workaround since MemoryProcessor.process must be synchronous
-            setTimeout(() => {
-              try {
-                sourceFunction(message).then(contextData => {
-                  // Cache the context if enabled
-                  if (this.cacheContext) {
-                    this.contextCache.set(cacheKey, contextData);
-                    logger.debug(`Cached context for message ${message.id} from source ${sourceFunction.name}`);
-                  }
-                }).catch(error => {
-                  logger.warn(`Error getting context from source ${sourceFunction.name}: ${error}`);
-                });
-              } catch (error) {
-                logger.warn(`Error scheduling context fetch from source ${sourceFunction.name}: ${error}`);
-              }
-            }, 0);
+            // Call the context source function synchronously
+            try {
+              const contextData = sourceFunction(message);
 
-            // For now, use empty data
-            logger.debug(`No cached context available for message ${message.id} from source ${sourceFunction.name}, scheduled async fetch`);
+              // Cache the context if enabled
+              if (this.cacheContext && contextData) {
+                this.contextCache.set(cacheKey, contextData);
+                logger.debug(`Cached context for message ${message.id} from source ${sourceFunction.name || 'anonymous'}`);
+              }
+
+              // Add to sources
+              if (contextData) {
+                Object.assign(sources, contextData);
+              }
+            } catch (error) {
+              logger.warn(`Error getting context from source ${sourceFunction.name || 'anonymous'}: ${error}`);
+            }
           } catch (error) {
-            logger.warn(`Error getting context from source ${sourceFunction.name}: ${error}`);
+            logger.warn(`Error processing context source: ${error}`);
           }
         }
 

@@ -4,8 +4,9 @@
  * This processor transforms message content in real-time as it flows through the memory system.
  * It can be used to format, sanitize, or enhance message content before it's sent to the LLM.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the MessageTransformer processor

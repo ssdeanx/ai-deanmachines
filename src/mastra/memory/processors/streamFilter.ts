@@ -4,8 +4,9 @@
  * This processor filters messages in real-time as they flow through the memory system.
  * It can be used to include or exclude messages based on custom criteria.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the StreamFilter processor

@@ -4,8 +4,9 @@
  * This processor handles stream objects in real-time as they flow through the memory system.
  * It can transform, filter, or enhance stream objects before they're processed further.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the StreamObjectProcessor
@@ -23,7 +24,7 @@ export type StreamObjectTransformFunction = (content: Record<string, any>) => Re
  * StreamObjectProcessor for memory messages
  * Processes stream objects in real-time
  */
-export class StreamObjectProcessor implements MemoryProcessor {
+export class StreamObjectProcessor extends MemoryProcessor {
   private transformFunctions: StreamObjectTransformFunction[];
   private applyToRoles: Set<string>;
   private extractTextContent: boolean;
@@ -40,7 +41,9 @@ export class StreamObjectProcessor implements MemoryProcessor {
     extractTextContent?: boolean;
     preserveOriginalContent?: boolean;
     textContentField?: string;
+    name?: string;
   } = {}) {
+    super({ name: options.name || 'StreamObjectProcessor' });
     this.transformFunctions = options.transformFunctions || [];
     this.applyToRoles = new Set(options.applyToRoles || ['user', 'assistant', 'system', 'tool']);
     this.extractTextContent = options.extractTextContent !== false;
@@ -59,72 +62,80 @@ export class StreamObjectProcessor implements MemoryProcessor {
   /**
    * Process messages by handling stream objects
    * @param messages - Array of messages to process
+   * @param _opts - Optional processor options
    * @returns Processed array of messages
    */
-  process(messages: Message[]): Message[] {
+  process(
+    messages: CoreMessage[],
+    _opts: MemoryProcessorOpts = {}
+  ): CoreMessage[] {
     if (!messages || messages.length === 0) {
       return messages;
     }
 
     let processedCount = 0;
 
-    // Process each message
+    // Process each message - create a new array to avoid mutating the input
     const processedMessages = messages.map(message => {
       // Skip messages that don't match role filters
       if (!this.applyToRoles.has(message.role)) {
         return message;
       }
 
-      // Skip messages with string content (not objects)
-      if (typeof message.content === 'string') {
+      try {
+        // Create a copy of the message to modify
+        const processedMessage = { ...message } as any;
+
+        // Handle object content if present
+        if (typeof message.content !== 'string' && message.content !== null) {
+          // Apply transformations to the content object
+          let transformedContent = { ...message.content as Record<string, any> };
+
+          // Apply each transformation function in sequence
+          for (const transformFn of this.transformFunctions) {
+            transformedContent = transformFn(transformedContent);
+          }
+
+          // Extract text content if configured
+          if (this.extractTextContent && transformedContent[this.textContentField]) {
+            // Set the content to the extracted text
+            processedMessage.content = transformedContent[this.textContentField] as string;
+
+            // Store metadata in annotations if available
+            if (this.preserveOriginalContent) {
+              const annotation = {
+                originalContent: message.content,
+                transformedContent: transformedContent
+              };
+
+              // Add to annotations if supported
+              if (Array.isArray(processedMessage.annotations)) {
+                processedMessage.annotations.push(annotation);
+              } else {
+                // Create annotations array if it doesn't exist
+                processedMessage.annotations = [annotation];
+              }
+            }
+          } else {
+            // Just update the content with the transformed object
+            processedMessage.content = JSON.stringify(transformedContent);
+          }
+
+          processedCount++;
+        }
+
+        return processedMessage;
+      } catch (error) {
+        logger.error(`Error processing message: ${error}`);
         return message;
       }
-
-      // Create a copy of the message to modify
-      const processedMessage = { ...message };
-      
-      // Apply transformations to the content object
-      let transformedContent = { ...message.content };
-      
-      // Apply each transformation function in sequence
-      for (const transformFn of this.transformFunctions) {
-        transformedContent = transformFn(transformedContent);
-      }
-      
-      // Extract text content if configured
-      if (this.extractTextContent && transformedContent[this.textContentField]) {
-        if (this.preserveOriginalContent) {
-          // Store the original content in metadata
-          processedMessage.metadata = processedMessage.metadata || {};
-          processedMessage.metadata.originalContent = processedMessage.content;
-          
-          // Store the transformed content in metadata
-          processedMessage.metadata.transformedContent = transformedContent;
-          
-          // Set the content to the extracted text
-          processedMessage.content = transformedContent[this.textContentField];
-        } else {
-          // Just replace the content with the extracted text
-          processedMessage.content = transformedContent[this.textContentField];
-        }
-      } else {
-        // Just update the content with the transformed object
-        processedMessage.content = transformedContent;
-      }
-      
-      processedCount++;
-      return processedMessage;
     });
-
     if (processedCount > 0) {
       logger.debug(`StreamObjectProcessor: Processed ${processedCount} messages`);
     }
 
     return processedMessages;
-  }
-}
-
-/**
+  }}/**
  * Common stream object transformations
  */
 export const CommonStreamTransforms = {
@@ -136,13 +147,13 @@ export const CommonStreamTransforms = {
   extractFields: (fields: string[]): StreamObjectTransformFunction => {
     return (content: Record<string, any>) => {
       const result: Record<string, any> = {};
-      
+
       for (const field of fields) {
         if (content[field] !== undefined) {
           result[field] = content[field];
         }
       }
-      
+
       return result;
     };
   },
@@ -158,7 +169,7 @@ export const CommonStreamTransforms = {
     return (content: Record<string, any>) => {
       const result = { ...content };
       const parts: string[] = [];
-      
+
       for (const field of fields) {
         if (content[field] !== undefined) {
           if (typeof content[field] === 'string') {
@@ -168,11 +179,11 @@ export const CommonStreamTransforms = {
           }
         }
       }
-      
+
       if (parts.length > 0) {
         result[targetField] = parts.join(separator);
       }
-      
+
       return result;
     };
   },
@@ -185,14 +196,14 @@ export const CommonStreamTransforms = {
   formatJsonFields: (fields: string[]): StreamObjectTransformFunction => {
     return (content: Record<string, any>) => {
       const result = { ...content };
-      
+
       for (const field of fields) {
         if (content[field] !== undefined) {
           try {
             // If it's a string, try to parse it as JSON
             if (typeof content[field] === 'string') {
               result[field] = JSON.parse(content[field]);
-            } 
+            }
             // If it's already an object, format it as a pretty JSON string
             else if (typeof content[field] === 'object') {
               result[field] = JSON.stringify(content[field], null, 2);
@@ -203,7 +214,7 @@ export const CommonStreamTransforms = {
           }
         }
       }
-      
+
       return result;
     };
   }

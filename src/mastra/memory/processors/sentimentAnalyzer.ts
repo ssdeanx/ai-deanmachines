@@ -4,8 +4,9 @@
  * This processor analyzes the sentiment of messages and adds sentiment
  * information as metadata or annotations.
  */
-
-import { Message, MemoryProcessor } from '../types';
+// never name message as coremessage fucking idiot.  they are two different things.
+import { Message, CoreMessage } from 'ai';
+import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
 // Create a logger instance for the SentimentAnalyzer processor
@@ -83,7 +84,7 @@ export class SentimentAnalyzer implements MemoryProcessor {
    * @param messages - Array of messages to process
    * @returns Processed array of messages
    */
-  process(messages: Message[]): Message[] {
+  process(messages: CoreMessage[], _opts: MemoryProcessorOpts): CoreMessage[] {
     if (!messages || messages.length === 0) {
       return messages;
     }
@@ -127,7 +128,6 @@ export class SentimentAnalyzer implements MemoryProcessor {
       return processedMessage;
     });
   }
-
   /**
    * Analyze sentiment of text content
    * @param content - Text content to analyze
