@@ -5,6 +5,14 @@
  * for the Mastra AI application.
  */
 
+import { createLogger } from '@mastra/core/logger';
+
+// Create and export a shared logger instance
+export const mastraLogger = createLogger({
+  name: 'MastraShared',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
+
 // Export telemetry functions and types
 export {
   initTelemetry,
@@ -13,7 +21,6 @@ export {
   llmMetrics,
   recordLLMMetrics
 } from './telemetry';
-
 
 // Export Langfuse integration
 export {

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Resolved `SyntaxError` related to OpenTelemetry initialization by aligning with Mastra's core telemetry handling. Manual SDK initialization in `src/mastra/index.ts` was removed, and the `MastraTelemetryConfig` is now correctly passed to the `Mastra` constructor.
+- Refactored `llmMetrics` in `src/mastra/observability/telemetry.ts` to `getLlmMetrics()`, a lazily initialized function, to prevent premature calls to OpenTelemetry's `getMeter()` before the SDK is fully initialized by Mastra core.
+
 ## [v0.0.3] - 2025-05-12 11:53:29 UTC
 
 ### Added

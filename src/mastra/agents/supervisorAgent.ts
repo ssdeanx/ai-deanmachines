@@ -5,25 +5,11 @@
  * to solve complex tasks through delegation and result synthesis.
  */
 
-import { Agent } from '@mastra/core';
-import { google } from '@ai-sdk/google';
-
-// Import types and constants
-import {
-  SupervisorAgentConfig,
-  SupervisorAgentConfigSchema,
-  Subtask,
-  SubtaskResult,
-  ComplexTaskOptions,
-  ComplexTaskOptionsSchema
-} from './types';
-import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
 import { BaseAgent } from './baseAgent';
-
-// Import AI SDK functions
-import { generateObject, zodSchema } from 'ai';
-import { z } from 'zod';
+import { SupervisorAgentConfigSchema, AgentType } from './types';
 import { createLogger } from '@mastra/core/logger';
+import { DefinedAgentConfig } from '../../config/agentConfig';
+import { DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
 
 // Create a logger instance for the SupervisorAgent
 const logger = createLogger({
@@ -33,6 +19,20 @@ const logger = createLogger({
 
 /**
  * SupervisorAgent class that extends BaseAgent with coordination capabilities
+ * Manages multiple worker agents to solve complex tasks
+ */
+export class SupervisorAgent extends BaseAgent {
+  private workerAgents: BaseAgent[];
+
+  /**
+   * Create a new SupervisorAgent instance
+   * @param config - Configuration for the supervisor agent, now using DefinedAgentConfig
+   */
+  constructor(config: DefinedAgentConfig) {
+    const supervisorSpecificConfig = {
+      ...config,
+      type: AgentType.SUPERVISOR,
+      instructions: config.instructions || DEFAULT_INSTRUCTIONS.SUPERVISOR,
  * Manages multiple worker agents to solve complex tasks
  */
 export class SupervisorAgent extends BaseAgent {

@@ -58,7 +58,6 @@ export enum AgentType {
   SUPERVISOR = 'supervisor',
   WORKER = 'worker',
 }
-
 /**
  * Default memory configuration
  */
