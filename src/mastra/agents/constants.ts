@@ -120,7 +120,7 @@ export const DEFAULT_MEMORY_CONFIG = {
  * @property {string} BROWSER - Tools for web browsing and interaction
  * @property {string} RAG - Tools for retrieval-augmented generation
  * @property {string} SYSTEM - Tools for system operations
- * @property {string} CUSTOM - Custom-defined tools
+ * @property {string} CUSTOM - Tools for custom functionality
  * @property {string} KNOWLEDGE - Tools for knowledge base access
  * @property {string} UTILITY - General utility tools
  * @property {string} EXTERNAL - Tools that interface with external services

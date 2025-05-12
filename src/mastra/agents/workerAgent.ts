@@ -9,7 +9,7 @@
 import { BaseAgent } from './baseAgent';
 import { WorkerAgentConfigSchema, WorkerAgentConfig, AgentType } from './types';
 import { createLogger } from '@mastra/core/logger';
-import { DefinedAgentConfig } from '../../config/agentConfig';
+import { DefinedAgentConfig, DefinedAgentConfigSchema } from '../config/agentConfig';
 import { DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
 
 // Create a logger instance for the WorkerAgent

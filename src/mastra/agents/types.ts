@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { BaseConfigSchema } from '../types';
-import { AgentType, DEFAULT_MODEL_NAMES } from './constants';
+import { AgentType, DEFAULT_MODEL_NAMES, DEFAULT_INSTRUCTIONS } from './constants';
 
 /**
  * Agent configuration schema

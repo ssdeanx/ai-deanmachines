@@ -169,7 +169,7 @@ export class Memory {
    * @param type - Type of the message
    * @returns The created message
    */
-  async addMessage(threadId: string, content: string, role: MessageRole, type: MessageType) {
+  async addMessage(threadId: string, content: string, role: string, type: string, metadata: { taskType: string; subtaskCount: number; timestamp: string; }, role: MessageRole, type: MessageType) {
     logger.info(`Adding message to thread ${threadId} with role ${role} and type ${type}`);
 
     const message = {
