@@ -1,3 +1,14 @@
+/**
+ * @file Agent configuration management for Mastra framework
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
+ * This file provides functionality for creating, validating, and managing agent configurations.
+ * It defines the structure of agent configurations and provides factory methods for creating
+ * pre-configured agents with different capabilities and characteristics.
+ */
 import { AgentConfig as MastraAgentConfig, GoogleAgentConfig, AgentConfigSchema as MastraAgentsTypesAgentConfigSchema } from '../agents/types';
 import { AgentLLMConfig, AgentLLMConfigSchema } from './types';
 import { getModelInstance } from './models';
@@ -5,19 +16,46 @@ import { MemoryConfigSchema } from '../memory/types'; // Added import for Memory
 import { createLogger } from '@mastra/core/logger';
 import { z } from 'zod';
 import { DEFAULT_INSTRUCTIONS, AgentType } from '../agents/constants';
+import { LLM_PROVIDER_CLIENTS } from './providers';
 
+/**
+ * Logger for agent configuration operations
+ */
 const logger = createLogger({
   name: 'MastraConfigAgent',
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
 });
 
+/**
+ * Extended schema for agent configurations with additional Mastra-specific properties
+ * @constant {z.ZodType}
+ */
 export const DefinedAgentConfigSchema = MastraAgentsTypesAgentConfigSchema.extend({
+  /** Unique identifier for the agent configuration */
   id: z.string(),
+  /** LLM configuration for the agent */
   agentLLMConfig: AgentLLMConfigSchema,
+  /** Optional memory configuration */
   memory: MemoryConfigSchema.optional(), // Changed from z.any() to MemoryConfigSchema
 });
+
+/**
+ * Type definition for the extended agent configuration
+ * @typedef {z.infer<typeof DefinedAgentConfigSchema>} DefinedAgentConfig
+ */
 export type DefinedAgentConfig = z.infer<typeof DefinedAgentConfigSchema>;
 
+/**
+ * Creates a validated agent configuration
+ * 
+ * @param {string} id - Unique identifier for the agent configuration
+ * @param {string} name - Display name for the agent
+ * @param {string} modelInstanceId - ID of the model instance to use
+ * @param {AgentType} [type=AgentType.GOOGLE] - Type of agent to create
+ * @param {string} [instructions] - Custom instructions for the agent
+ * @param {Partial<Omit<GoogleAgentConfig, 'name' | 'instructions' | 'modelName' | 'type' | 'agentLLMConfig'>>} [agentSpecificProps] - Additional agent-specific properties
+ * @returns {DefinedAgentConfig | null} The validated agent configuration or null if validation fails
+ */
 function createAgentConfig(
   id: string,
   name: string,
@@ -33,8 +71,15 @@ function createAgentConfig(
       return null;
     }
 
+    // Determine providerId: use specified or default Google provider
+    const defaultProvider = LLM_PROVIDER_CLIENTS.find(c => c.type === 'google')?.id;
+    const providerId = (agentSpecificProps as any)?.providerId || defaultProvider!;
+
     const agentLLMConfig: AgentLLMConfig = {
       modelInstanceId: modelInstance.id,
+      maxTokens: (agentSpecificProps as any)?.maxTokens,
+      temperature: (agentSpecificProps as any)?.temperature,
+      topP: (agentSpecificProps as any)?.topP
     };
 
     const baseConfig: Partial<MastraAgentConfig> = {
@@ -70,6 +115,11 @@ function createAgentConfig(
   }
 }
 
+/**
+ * Default Google agent configuration using Gemini 2.0 Flash
+ * General-purpose agent with balanced performance and speed
+ * @constant {DefinedAgentConfig}
+ */
 export const defaultGoogleAgentConfig = createAgentConfig(
   'google-default-gemini-2.0-flash',
   'Default Google Agent (Gemini 2.0 Flash GenAI)',
@@ -79,6 +129,11 @@ export const defaultGoogleAgentConfig = createAgentConfig(
   { multimodal: true }
 );
 
+/**
+ * Power Google agent configuration using Gemini 2.5 Pro
+ * High-capability agent optimized for complex reasoning and precision
+ * @constant {DefinedAgentConfig}
+ */
 export const powerGoogleAgentConfig = createAgentConfig(
   'google-power-gemini-2.5-pro',
   'Power Google Agent (Gemini 2.5 Pro Preview GenAI)',
@@ -88,6 +143,11 @@ export const powerGoogleAgentConfig = createAgentConfig(
   { multimodal: true, temperature: 0.5 }
 );
 
+/**
+ * Creative Google agent configuration using Gemini 2.5 Flash
+ * Agent optimized for creative tasks with higher temperature setting
+ * @constant {DefinedAgentConfig}
+ */
 export const creativeGoogleAgentConfig = createAgentConfig(
   'google-creative-gemini-2.5-flash',
   'Creative Google Agent (Gemini 2.5 Flash Preview GenAI)',
@@ -97,7 +157,10 @@ export const creativeGoogleAgentConfig = createAgentConfig(
   { temperature: 0.9, topP: 0.95 }
 );
 
-// Consolidate all agent configurations
+/**
+ * Collection of all available agent configurations
+ * @constant {DefinedAgentConfig[]}
+ */
 export const ALL_AGENT_CONFIGS: DefinedAgentConfig[] = [
   defaultGoogleAgentConfig,
   powerGoogleAgentConfig,
@@ -111,6 +174,13 @@ if (ALL_AGENT_CONFIGS.length === 0) {
   ALL_AGENT_CONFIGS.forEach(conf => logger.debug(`Available agent config: ${conf.id} (${conf.name}) using model ${conf.agentLLMConfig.modelInstanceId}`));
 }
 
+/**
+ * Retrieves an agent configuration by its ID
+ * 
+ * @param {string} id - The ID of the agent configuration to retrieve
+ * @returns {DefinedAgentConfig} The requested agent configuration
+ * @throws {Error} If the agent configuration is not found
+ */
 export function getAgentConfig(id: string): DefinedAgentConfig {
   const agentConfig = ALL_AGENT_CONFIGS.find(ac => ac.id === id);
   if (!agentConfig) {

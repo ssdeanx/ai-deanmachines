@@ -1,3 +1,15 @@
+/**
+ * @file Main configuration entry point for Mastra framework
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
+ * This file serves as the main entry point for the Mastra configuration module.
+ * It exports all configuration components, initializes the configuration system,
+ * and provides logging of the loaded configuration elements.
+ */
+
 export * from './agentConfig';
 export * from './models';
 export * from './providers';
@@ -8,11 +20,15 @@ import { LLM_PROVIDER_CLIENTS } from './providers'; // Corrected import name
 import { ALL_MODEL_INSTANCES } from './models';
 import { ALL_AGENT_CONFIGS } from './agentConfig';
 
+/**
+ * Logger for the configuration module
+ */
 const logger = createLogger({
   name: 'MastraConfigIndex',
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
 });
 
+// Log initialization information
 logger.info('Mastra Configuration Module Initialized');
 logger.info(`Loaded ${LLM_PROVIDER_CLIENTS.length} provider clients.`);
 logger.info(`Loaded ${ALL_MODEL_INSTANCES.length} model instances.`);

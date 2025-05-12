@@ -1,3 +1,14 @@
+/**
+ * @file Model configuration and initialization for Mastra framework
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
+ * This file defines and initializes the language and embedding models used by the Mastra framework.
+ * It creates model instances with specific configurations, capabilities, and parameters,
+ * and provides functions to access these configured models.
+ */
 import { LanguageModelV1, EmbeddingModelV1 } from '@ai-sdk/provider';
 import {
   ModelInstanceConfig,
@@ -8,12 +19,43 @@ import {
 import { getProviderClient } from './providers';
 import { createLogger } from '@mastra/core/logger';
 
+/**
+ * Logger for model configuration operations
+ */
 const logger = createLogger({
   name: 'MastraConfigModels',
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
 });
 
-// Helper function to create a text model instance
+/**
+ * Creates a text model instance with specified configuration
+ * 
+ * @param {string} providerClientId - ID of the provider client to use
+ * @param {string} modelIdString - Model identifier string within the provider
+ * @param {string} name - Display name for the model
+ * @param {string} [overrideId] - Optional custom ID for the model instance
+ * @param {number} [contextWindow] - Maximum input token limit
+ * @param {number} [maxOutputTokens] - Maximum output token limit
+ * @param {string} [description] - Description of the model
+ * @param {boolean} [supportsSystemPrompt] - Whether the model supports system prompts
+ * @param {boolean} [supportsFunctionCalling] - Whether the model supports function calling
+ * @param {boolean} [supportsStructuredOutput] - Whether the model supports structured output
+ * @param {boolean} [supportsStreaming] - Whether the model supports streaming responses
+ * @param {boolean} [supportsAudioInput] - Whether the model supports audio input
+ * @param {boolean} [supportsImageInput] - Whether the model supports image input
+ * @param {boolean} [supportsVideoInput] - Whether the model supports video input
+ * @param {boolean} [supportsTextInput] - Whether the model supports text input
+ * @param {boolean} [supportsCodeInput] - Whether the model supports code input
+ * @param {boolean} [supportsCaching] - Whether the model supports caching
+ * @param {boolean} [supportsGrounding] - Whether the model supports grounding
+ * @param {boolean} [supportsCodeExecution] - Whether the model supports code execution
+ * @param {boolean} [supportsTuning] - Whether the model supports fine-tuning
+ * @param {boolean} [supportsThinking] - Whether the model supports thinking capabilities
+ * @param {boolean} [supportsLiveAPI] - Whether the model supports live API interactions
+ * @param {boolean} [supportsImageGeneration] - Whether the model supports image generation
+ * @param {boolean} [supportsAudioGeneration] - Whether the model supports audio generation
+ * @returns {ModelInstanceConfig | null} The created model instance configuration or null if creation fails
+ */
 function createModelInstance(
   providerClientId: string,
   modelIdString: string,
@@ -89,7 +131,18 @@ function createModelInstance(
   }
 }
 
-// Helper function to create an embedding model instance
+/**
+ * Creates an embedding model instance with specified configuration
+ * 
+ * @param {string} providerClientId - ID of the provider client to use
+ * @param {string} modelIdString - Model identifier string within the provider
+ * @param {string} name - Display name for the embedding model
+ * @param {string} [overrideId] - Optional custom ID for the embedding model instance
+ * @param {number} [outputDimensions] - Dimensionality of the embedding output
+ * @param {number} [contextWindow] - Maximum input token limit
+ * @param {string} [description] - Description of the embedding model
+ * @returns {EmbeddingModelInstanceConfig | null} The created embedding model instance configuration or null if creation fails
+ */
 function createEmbeddingModelInstance(
   providerClientId: string,
   modelIdString: string,
@@ -135,8 +188,11 @@ function createEmbeddingModelInstance(
   }
 }
 
-// --- Google Gemini 2.x Models (via Generative AI API) ---
-
+/**
+ * Gemini 2.5 Pro Preview model instance
+ * Google's most powerful thinking model with maximum response accuracy and state-of-the-art performance
+ * @constant {ModelInstanceConfig}
+ */
 const gemini25ProPreviewGenAI = createModelInstance(
   'google-generative-ai-default',
   'models/gemini-2.5-pro-preview-05-06',
@@ -164,6 +220,11 @@ const gemini25ProPreviewGenAI = createModelInstance(
   false  // AudioGeneration
 );
 
+/**
+ * Gemini 2.5 Flash Preview model instance
+ * Google's best model in terms of price-performance, offering well-rounded capabilities
+ * @constant {ModelInstanceConfig}
+ */
 const gemini25FlashPreviewGenAI = createModelInstance(
   'google-generative-ai-default',
   'models/gemini-2.5-flash-preview-04-17',
@@ -191,6 +252,11 @@ const gemini25FlashPreviewGenAI = createModelInstance(
   false  // AudioGeneration
 );
 
+/**
+ * Gemini 2.0 Flash model instance
+ * Next-generation model with advanced features, speed, and multimodal capabilities
+ * @constant {ModelInstanceConfig}
+ */
 const gemini20FlashGenAI = createModelInstance(
   'google-generative-ai-default',
   'models/gemini-2.0-flash',
@@ -218,6 +284,11 @@ const gemini20FlashGenAI = createModelInstance(
   true   // AudioGeneration (coming soon)
 );
 
+/**
+ * Gemini 2.0 Flash Lite model instance
+ * Optimized for cost efficiency and low latency
+ * @constant {ModelInstanceConfig}
+ */
 const gemini20FlashLiteGenAI = createModelInstance(
   'google-generative-ai-default',
   'models/gemini-2.0-flash-lite',
@@ -245,6 +316,11 @@ const gemini20FlashLiteGenAI = createModelInstance(
   false  // AudioGeneration
 );
 
+/**
+ * Gemini 2.0 Flash Live model instance
+ * Specialized for low-latency bidirectional voice and video interactions
+ * @constant {ModelInstanceConfig}
+ */
 const gemini20FlashLiveGenAI = createModelInstance(
   'google-generative-ai-default',
   'models/gemini-2.0-flash-live-001',

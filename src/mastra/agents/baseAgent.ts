@@ -1,412 +1,202 @@
-import { z } from 'zod';
+/**
+ * @file BaseAgent implementation for Mastra framework
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
+ * This file provides the BaseAgent class which serves as the foundation for all agent types
+ * in the Mastra framework. It handles model initialization, memory management, and provides
+ * core functionality for streaming and generating responses.
+ */
 import { createLogger } from '@mastra/core/logger';
-import { Agent } from '@mastra/core';
+import { Agent as MastraAgent } from '@mastra/core';
 import { google } from '@ai-sdk/google';
-import { streamText, CoreMessage } from 'ai';
-
-import { Memory, MemoryConfig } from '../memory';
+import { Memory } from '../memory';
 import { DefinedAgentConfig } from '../config/agentConfig';
-import { getModelInstance, ModelInstanceConfig } from '../config/models';
-import { getProviderClient, ProviderClientConfig } from '../config/providers';
+import { getModelInstance } from '../config/models';
 import { getTracer, recordLLMMetrics } from '../observability/telemetry';
-import { TokenLimiter } from '../memory/processors/index';
-import {
-  AgentType,
-  DEFAULT_MODEL_NAMES,
-  DEFAULT_INSTRUCTIONS,
-  StreamOptionsSchema,
-  MessageRoleSchema,
-  MessageTypeSchema
-} from './constants';
+import { AgentType, DEFAULT_INSTRUCTIONS } from './constants';
+import { StreamOptionsSchema } from './types';
+import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 
+// Create a logger instance for the BaseAgent
 const logger = createLogger({
   name: 'Mastra-BaseAgent',
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
 });
 
+/**
+ * BaseAgent class that provides core functionality for all agent types
+ * 
+ * @class BaseAgent
+ * @description Foundation class for all Mastra agents with common functionality
+ */
 export class BaseAgent {
+  /** Name of the agent */
   public name: string;
-  protected agent: Agent;
+  /** Underlying Mastra agent instance */
+  protected agent: MastraAgent;
+  /** AI SDK model instance */
   protected sdkModel: any;
+  /** Optional memory instance for conversation history */
   protected memory?: Memory;
+  /** Array of tools available to the agent */
   protected tools: any[] = [];
+  /** Type of agent (e.g., CHAT, ASSISTANT, etc.) */
   protected type: AgentType;
-  protected threadId?: string;
-  protected resourceId?: string;
-  protected modelInstanceConfig: ModelInstanceConfig;
-  protected providerClientConfig: ProviderClientConfig;
 
+  /** Temperature parameter for model generation */
   protected temperature: number;
+  /** Maximum tokens for model output */
   protected maxTokens?: number;
+  /** Top-p sampling parameter */
   protected topP?: number;
+  /** Top-k sampling parameter */
   protected topK?: number;
 
+  /**
+   * Create a new BaseAgent instance
+   * 
+   * @param {DefinedAgentConfig} config - Configuration for the agent
+   * @constructor
+   */
   constructor(config: DefinedAgentConfig) {
     this.name = config.name;
     logger.info(`Creating BaseAgent with name: ${this.name}`);
 
-    this.modelInstanceConfig = getModelInstance(config.agentLLMConfig.modelInstanceId);
-    this.providerClientConfig = getProviderClient(config.agentLLMConfig.providerId);
+    const modelInst = getModelInstance(config.agentLLMConfig.modelInstanceId);
+    this.sdkModel = google(modelInst.modelIdString);
 
-    if (!this.modelInstanceConfig) {
-      throw new Error(`Model instance with ID '${config.agentLLMConfig.modelInstanceId}' not found.`);
-    }
-    if (!this.providerClientConfig) {
-      throw new Error(`Provider client with ID '${config.agentLLMConfig.providerId}' not found.`);
-    }
+    this.type = config.type;
+    this.temperature = config.agentLLMConfig.temperature ?? config.temperature ?? 0.7;
+    this.maxTokens = config.agentLLMConfig.maxTokens ?? config.maxTokens ?? modelInst.maxOutputTokens;
+    this.topP = config.agentLLMConfig.topP ?? config.topP;
+    this.topK = config.topK;
 
-    logger.info(`Initializing agent with model ID: ${this.modelInstanceConfig.modelIdString} from provider: ${this.providerClientConfig.name}`);
+    if (config.memory) this.memory = new Memory(config.memory);
+    if (config.tools) this.tools = config.tools;
 
-    if (this.providerClientConfig.type === 'google') {
-      this.sdkModel = google(this.modelInstanceConfig.modelIdString);
-    } else {
-      throw new Error(`Unsupported provider type: ${this.providerClientConfig.type}`);
-    }
-
-    this.type = config.type || AgentType.BASE;
-    this.temperature = config.temperature ?? this.modelInstanceConfig.defaultTemperature ?? 0.7;
-    this.maxTokens = config.maxTokens ?? this.modelInstanceConfig.maxOutputTokens;
-    this.topP = config.topP ?? this.modelInstanceConfig.defaultTopP;
-    this.topK = config.topK ?? this.modelInstanceConfig.defaultTopK;
-
-    if (config.memory) {
-      logger.debug(`Setting memory for agent: ${this.name}`);
-      this.memory = new Memory(config.memory as MemoryConfig);
-    }
-
-    if (config.tools) {
-      logger.debug(`Setting ${config.tools.length} tools for agent: ${this.name}`);
-      this.tools = config.tools;
-    }
-
-    const generationOptions: any = {
-      temperature: this.temperature,
-      maxTokens: this.maxTokens,
-      topP: this.topP,
-      topK: this.topK,
-    };
-    Object.keys(generationOptions).forEach(key => generationOptions[key] === undefined && delete generationOptions[key]);
-
-    this.agent = new Agent({
+    this.agent = new MastraAgent({
       name: this.name,
       instructions: config.instructions || DEFAULT_INSTRUCTIONS.BASE,
       model: this.sdkModel,
-      tools: this.tools.length > 0 ? this.tools.reduce((acc, tool) => {
-        if (tool.name) {
-          logger.debug(`Adding tool to @mastra/core Agent: ${tool.name}`);
-          acc[tool.name] = tool;
-        }
-        return acc;
-      }, {}) : undefined,
+      tools: this.tools.length
+        ? this.tools.reduce((acc, t) => ({ ...acc, [t.name]: t }), {})
+        : undefined
     });
 
-    logger.info(`BaseAgent ${this.name} created successfully with type: ${this.type}, using model: ${this.modelInstanceConfig.name}`);
+    logger.info(`BaseAgent '${this.name}' initialized`);
   }
 
+  /**
+   * Stream a response from the agent
+   * 
+   * @param {string} input - User input to process
+   * @param {any} options - Stream options
+   * @returns {Promise<any>} Stream response
+   * @async
+   */
+  
   async stream(input: string, options: any = {}) {
-    logger.info(`Streaming response for input: ${input.substring(0, 50)}${input.length > 50 ? '...' : ''}`);
-    logger.debug(`Stream options: ${JSON.stringify(options)}`);
-
     const tracer = getTracer('mastra.agent.stream');
     const span = tracer.startSpan(this.name);
-    span.setAttributes({
-      'agent.name': this.name,
-      'agent.type': this.type,
-      'agent.model': this.modelInstanceConfig.modelIdString,
-      'input.length': input.length,
-      'operation': 'stream'
-    });
 
-    const startTime = Date.now();
-    let promptTokens = 0;
-    try {
-      promptTokens = simpleTokenCounter(input);
-      span.setAttribute('prompt.tokens', promptTokens);
-    } catch (e) {
-      logger.warn('Could not count prompt tokens for stream method.', e);
-    }
+    const opts = StreamOptionsSchema.parse(options);
+    const resourceId = opts.resourceId || uuidv4();
+    const threadId = opts.threadId || uuidv4();
+    if (this.memory) await this.memory.addMessage(threadId, input, 'user', 'text');
 
-    await this.prepareMemoryContext(input, options);
-
-    try {
-      const validatedOptions = StreamOptionsSchema.parse(options);
-
-      if (this.memory && this.threadId) {
-        await this.storeMessageInMemory(input, 'user', 'text');
-      }
-
-      const streamResponse = await streamText({
-        model: this.sdkModel,
-        temperature: validatedOptions.temperature ?? this.temperature,
-        maxTokens: validatedOptions.maxTokens ?? this.maxTokens,
-        topP: validatedOptions.topP ?? this.topP,
-        topK: validatedOptions.topK ?? this.topK,
-        prompt: input,
-        tools: this.tools.length > 0 ? this.tools.reduce((acc, tool) => {
-          if (tool.name && tool.description && tool.parameters) {
-            acc[tool.name] = { description: tool.description, parameters: tool.parameters };
-          }
-          return acc;
-        }, {}) : undefined,
-      });
-
-      logger.debug('Stream response started successfully');
-
-      recordLLMMetrics({
-        promptTokens,
-        modelName: this.modelInstanceConfig.modelIdString,
-        operationType: 'stream',
-      });
-
-      let fullText = '';
-      let completionTokens = 0;
-
-      const textStream = streamResponse.textStream;
-      const toolCallsStream = streamResponse.toolCallsStream;
-      const toolResultsStream = streamResponse.toolResultsStream;
-
-      const streamCompletePromise = (async () => {
-        try {
-          for await (const chunk of textStream) {
-            fullText += chunk;
-          }
-          completionTokens = simpleTokenCounter(fullText);
-
-          if (toolCallsStream) {
-            const toolCalls: any[] = [];
-            for await (const toolCall of toolCallsStream) {
-              toolCalls.push(toolCall);
-              logger.info(`Tool call received: ${toolCall.toolName}`, toolCall.args);
-            }
-          }
-        } catch (error) {
-          logger.error('Error processing stream content:', error);
-          span.setStatus({ code: 2, message: error instanceof Error ? error.message : String(error) });
-          recordLLMMetrics({
-            error: true,
-            modelName: this.modelInstanceConfig.modelIdString,
-            operationType: 'stream',
-            latency: Date.now() - startTime,
-            promptTokens,
-          });
-          throw error;
-        } finally {
-          const latency = Date.now() - startTime;
-          span.setAttributes({
-            'completion.tokens': completionTokens,
-            'total.tokens': promptTokens + completionTokens,
-            'latency.ms': latency,
-          });
-          span.end();
-          recordLLMMetrics({
-            promptTokens,
-            completionTokens,
-            totalTokens: promptTokens + completionTokens,
-            latency,
-            modelName: this.modelInstanceConfig.modelIdString,
-            operationType: 'stream',
-          });
-          if (this.memory && this.threadId && fullText) {
-            await this.storeMessageInMemory(fullText, 'assistant', 'text');
-          }
-        }
-      })();
-
-      return {
-        text: streamResponse.text,
-        textStream: streamResponse.textStream,
-        toolCalls: streamResponse.toolCalls,
-        toolCallsStream: streamResponse.toolCallsStream,
-        toolResults: streamResponse.toolResults,
-        toolResultsStream: streamResponse.toolResultsStream,
-        finishReason: streamResponse.finishReason,
-        usage: streamResponse.usage,
-        rawResponse: streamResponse.rawResponse,
-        streamComplete: streamCompletePromise,
-      };
-
-    } catch (error) {
-      const latency = Date.now() - startTime;
-      logger.error(`Error streaming response: ${error instanceof Error ? error.message : String(error)}`);
-      span.setStatus({ code: 2, message: error instanceof Error ? error.message : String(error) });
-      span.end();
-      recordLLMMetrics({
-        error: true,
-        modelName: this.modelInstanceConfig.modelIdString,
-        operationType: 'stream',
-        latency,
-        promptTokens,
-      });
-      throw error;
-    }
+    const response = await this.agent.stream(input, { ...opts, resourceId, threadId });
+    recordLLMMetrics({ modelName: this.sdkModel.modelIdString, operationType: 'stream' });
+    span.end();
+    return response;
   }
 
+  /**
+   * Generate a complete response from the agent
+   * 
+   * @param {string} input - User input to process
+   * @param {any} options - Generation options
+   * @returns {Promise<any>} Complete response
+   * @async
+   */
   async generate(input: string, options: any = {}) {
-    logger.info(`Generating response for input: ${input.substring(0, 50)}${input.length > 50 ? '...' : ''}`);
-    logger.debug(`Generate options: ${JSON.stringify(options)}`);
-
     const tracer = getTracer('mastra.agent.generate');
     const span = tracer.startSpan(this.name);
-    span.setAttributes({
-      'agent.name': this.name,
-      'agent.type': this.type,
-      'agent.model': this.modelInstanceConfig.modelIdString,
-      'input.length': input.length,
-      'operation': 'generate'
-    });
 
-    const startTime = Date.now();
-    let promptTokens = 0;
-    try {
-      promptTokens = simpleTokenCounter(input);
-      span.setAttribute('prompt.tokens', promptTokens);
-    } catch (e) {
-      logger.warn('Could not count prompt tokens for generate method.', e);
-    }
+    const opts = StreamOptionsSchema.parse(options);
+    const resourceId = opts.resourceId || uuidv4();
+    const threadId = opts.threadId || uuidv4();
+    if (this.memory) await this.memory.addMessage(threadId, input, 'user', 'text');
 
-    await this.prepareMemoryContext(input, options);
-
-    try {
-      const validatedOptions = options;
-
-      if (this.memory && this.threadId) {
-        await this.storeMessageInMemory(input, 'user', 'text');
-      }
-
-      const { text, toolCalls, toolResults, finishReason, usage, rawResponse } = await streamText({
-        model: this.sdkModel,
-        temperature: validatedOptions.temperature ?? this.temperature,
-        maxTokens: validatedOptions.maxTokens ?? this.maxTokens,
-        topP: validatedOptions.topP ?? this.topP,
-        topK: validatedOptions.topK ?? this.topK,
-        prompt: input,
-        tools: this.tools.length > 0 ? this.tools.reduce((acc, tool) => {
-          if (tool.name && tool.description && tool.parameters) {
-            acc[tool.name] = { description: tool.description, parameters: tool.parameters };
-          }
-          return acc;
-        }, {}) : undefined,
-      });
-
-      const fullText = await text;
-      const completionTokens = simpleTokenCounter(fullText);
-      const latency = Date.now() - startTime;
-
-      logger.debug('Generate response completed successfully');
-      span.setAttributes({
-        'completion.tokens': completionTokens,
-        'total.tokens': promptTokens + completionTokens,
-        'latency.ms': latency,
-      });
-      span.setStatus({ code: 1 });
-      span.end();
-
-      recordLLMMetrics({
-        promptTokens,
-        completionTokens,
-        totalTokens: promptTokens + completionTokens,
-        latency,
-        modelName: this.modelInstanceConfig.modelIdString,
-        operationType: 'generate',
-      });
-
-      if (this.memory && this.threadId && fullText) {
-        await this.storeMessageInMemory(fullText, 'assistant', 'text');
-      }
-
-      if (toolCalls && (await toolCalls).length > 0) {
-        logger.info('Tool calls received in generate:', await toolCalls);
-      }
-
-      return {
-        text: fullText,
-        toolCalls: await toolCalls,
-        toolResults: await toolResults,
-        finishReason: await finishReason,
-        usage: await usage,
-        rawResponse: await rawResponse,
-      };
-
-    } catch (error) {
-      const latency = Date.now() - startTime;
-      logger.error(`Error generating response: ${error instanceof Error ? error.message : String(error)}`);
-      span.setStatus({ code: 2, message: error instanceof Error ? error.message : String(error) });
-      span.end();
-      recordLLMMetrics({
-        error: true,
-        modelName: this.modelInstanceConfig.modelIdString,
-        operationType: 'generate',
-        latency,
-        promptTokens,
-      });
-      throw error;
-    }
+    const resp = await this.agent.generate(input, { ...opts, resourceId, threadId });
+    recordLLMMetrics({ modelName: this.sdkModel.modelIdString, operationType: 'generate' });
+    span.end();
+    return resp;
   }
 
-  private async prepareMemoryContext(input: string, options: any = {}) {
-    if (!this.memory) return;
-
-    this.threadId = options.threadId || this.threadId;
-    this.resourceId = options.resourceId || this.resourceId;
-
-    if (!this.threadId) {
-      if (options.createThreadIfNotExists !== false) {
-        this.threadId = await this.memory.createThread();
-        logger.info(`New thread created for agent ${this.name}: ${this.threadId}`);
-      } else {
-        logger.warn("Memory is enabled, but no threadId provided and createThreadIfNotExists is false.");
-        return;
-      }
-    }
-  }
-
-  private filterMessagesByRelevance(messages: any[], query: string, limit: number): any[] {
-    logger.debug(`Filtering messages by relevance (placeholder). Query: ${query}, Limit: ${limit}`);
-    return messages.slice(-limit);
-  }
-
-  private async storeMessageInMemory(
-    content: string,
-    role: z.infer<typeof MessageRoleSchema>,
-    type: z.infer<typeof MessageTypeSchema>
-  ) {
-    if (this.memory && this.threadId) {
-      try {
-        await this.memory.addMessage(this.threadId, content, role, type);
-        logger.debug(`Message stored in memory. Thread: ${this.threadId}, Role: ${role}`);
-      } catch (error) {
-        logger.error(`Error storing message in memory: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-  }
-
-  public getAgentInstance(): Agent {
+  /**
+   * Get the underlying Mastra agent instance
+   * 
+   * @returns {MastraAgent} The Mastra agent instance
+   */
+  public getAgentInstance(): MastraAgent {
     return this.agent;
   }
 
+  /**
+   * Get the model name used by this agent
+   * 
+   * @returns {string} Model name
+   */
   public getModelName(): string {
-    return this.modelInstanceConfig.name;
+    return this.sdkModel.modelIdString;
   }
 
-  public getModelId(): string {
-    return this.modelInstanceConfig.modelIdString;
+  /**
+   * Get the tools available to this agent
+   * 
+   * @param {Object} params - Parameters for tool retrieval
+   * @param {any} [params.runtimeContext] - Runtime context for tool retrieval
+   * @returns {Promise<any>} Available tools
+   * @async
+   */
+  public async getTools(params: { runtimeContext?: any } = {}): Promise<any> {
+    return this.agent.getTools(params);
   }
 
-  public getInstructions(): string {
-    return this.agent.instructions || '';
+  /**
+   * Get the model used by this agent
+   * 
+   * @param {Object} params - Parameters for model retrieval
+   * @param {any} [params.runtimeContext] - Runtime context for model retrieval
+   * @returns {Promise<any>} Model information
+   * @async
+   */
+  public async getModel(params: { runtimeContext?: any } = {}): Promise<any> {
+    return this.agent.getModel(params);
   }
 
-  public getTools(): any[] {
-    return this.tools;
+  /**
+   * Get the instructions used by this agent
+   * 
+   * @param {Object} params - Parameters for instructions retrieval
+   * @param {any} [params.runtimeContext] - Runtime context for instructions retrieval
+   * @returns {Promise<string>} Agent instructions
+   * @async
+   */
+  public async getInstructions(params: { runtimeContext?: any } = {}): Promise<string> {
+    return this.agent.getInstructions(params);
   }
 
-  public getCurrentThreadId(): string | undefined {
-    return this.threadId;
-  }
-
-  public setThreadId(threadId: string): void {
-    this.threadId = threadId;
-    logger.info(`Thread ID for agent ${this.name} set to: ${threadId}`);
+  /**
+   * Get the underlying Mastra agent instance
+   * 
+   * @returns {MastraAgent} The Mastra agent instance
+   */
+  public getAgent(): MastraAgent {
+    return this.agent;
   }
 }
-
