@@ -1,7 +1,13 @@
 import { Mastra } from '@mastra/core';
-import { logger, createLogger } from './observability/logger';
+import { createLogger } from '@mastra/core/logger';
 import { createTelemetryConfig } from './observability/langfuse';
-import { initTelemetry, telemetry } from './observability/telemetry';
+import { initTelemetry } from './observability/telemetry';
+
+// Create a logger instance for the main Mastra module
+const logger = createLogger({
+  name: 'Mastra',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Initialize and configure the Mastra instance
@@ -107,9 +113,6 @@ export function importAgents(agents: Record<string, any>) {
   logger.info('Agents imported successfully');
   return mastra;
 }
-
-// Re-export the logger for use throughout the application
-export { logger, createLogger };
 
 // Export core types and constants
 export * from './types';

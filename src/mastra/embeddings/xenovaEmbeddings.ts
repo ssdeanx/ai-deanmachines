@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { Embeddings } from './embeddings';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the XenovaEmbeddings class
+const logger = createLogger({
+  name: 'Mastra-XenovaEmbeddings',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Define the Xenova embeddings configuration schema
 export const XenovaEmbeddingsConfigSchema = z.object({
@@ -34,11 +41,11 @@ export class XenovaEmbeddings extends Embeddings {
 
     // Validate configuration
     const validatedConfig = XenovaEmbeddingsConfigSchema.parse(config);
-    
+
     this.modelName = validatedConfig.modelName;
     this.quantization = validatedConfig.quantization;
     this.dimensions = validatedConfig.dimensions;
-    
+
     // Model will be loaded on first use
     this.model = null;
     this.pipeline = null;
@@ -55,27 +62,27 @@ export class XenovaEmbeddings extends Embeddings {
     try {
       // TODO: Implement actual Xenova model loading
       // For now, use a mock implementation
-      console.log(`[Xenova] Loading model: ${this.modelName}`);
-      
+      logger.info(`[Xenova] Loading model: ${this.modelName}`);
+
       // Mock the model loading
       this.model = {
         name: this.modelName,
         dimensions: this.dimensions,
       };
-      
+
       // Mock the pipeline
       this.pipeline = {
         embed: async (text: string) => {
-          console.log(`[Xenova] Embedding text: ${text.substring(0, 50)}...`);
+          logger.debug(`[Xenova] Embedding text: ${text.substring(0, 50)}...`);
           // Return a mock embedding vector with the specified dimensions
           return Array(this.dimensions).fill(0).map(() => Math.random() - 0.5);
         }
       };
-      
+
       this.isModelLoaded = true;
-      console.log(`[Xenova] Model loaded: ${this.modelName}`);
+      logger.info(`[Xenova] Model loaded: ${this.modelName}`);
     } catch (error) {
-      console.error(`[Xenova] Error loading model: ${error}`);
+      logger.error(`[Xenova] Error loading model: ${error}`);
       throw new Error(`Failed to load Xenova model: ${error}`);
     }
   }
@@ -90,7 +97,7 @@ export class XenovaEmbeddings extends Embeddings {
     if (!this.isModelLoaded) {
       await this.loadModel();
     }
-    
+
     // Generate the embedding
     return this.pipeline.embed(text);
   }
@@ -105,13 +112,13 @@ export class XenovaEmbeddings extends Embeddings {
     if (!this.isModelLoaded) {
       await this.loadModel();
     }
-    
+
     // Generate embeddings for each text
     const embeddings = [];
     for (const text of texts) {
       embeddings.push(await this.pipeline.embed(text));
     }
-    
+
     return embeddings;
   }
 }

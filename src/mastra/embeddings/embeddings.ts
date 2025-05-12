@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the Embeddings class
+const logger = createLogger({
+  name: 'Mastra-Embeddings',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Define the embeddings configuration schema
 export const EmbeddingsConfigSchema = z.object({
@@ -23,9 +30,9 @@ export class Embeddings {
   constructor(config: EmbeddingsConfig) {
     // Validate configuration
     const validatedConfig = EmbeddingsConfigSchema.parse(config);
-    
+
     this.provider = validatedConfig.provider;
-    
+
     // Create the appropriate embeddings instance based on the provider
     switch (validatedConfig.provider) {
       case 'xenova':
@@ -49,7 +56,7 @@ export class Embeddings {
     // For now, return a mock implementation
     return {
       embed: async (text: string) => {
-        console.log(`[Mock Xenova] Embedding text: ${text.substring(0, 50)}...`);
+        logger.debug(`[Mock Xenova] Embedding text: ${text.substring(0, 50)}...`);
         // Return a mock embedding vector (384 dimensions)
         return Array(384).fill(0).map(() => Math.random() - 0.5);
       }
@@ -66,7 +73,7 @@ export class Embeddings {
     // For now, return a mock implementation
     return {
       embed: async (text: string) => {
-        console.log(`[Mock Google] Embedding text: ${text.substring(0, 50)}...`);
+        logger.debug(`[Mock Google] Embedding text: ${text.substring(0, 50)}...`);
         // Return a mock embedding vector (1536 dimensions)
         return Array(1536).fill(0).map(() => Math.random() - 0.5);
       }

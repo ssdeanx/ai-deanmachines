@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the VectorStore
+const logger = createLogger({
+  name: 'Mastra-VectorStore',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Define the vector store configuration schema
 export const VectorStoreConfigSchema = z.object({
@@ -39,9 +46,9 @@ export class VectorStore {
   constructor(config: VectorStoreConfig) {
     // Validate configuration
     const validatedConfig = VectorStoreConfigSchema.parse(config);
-    
+
     this.provider = validatedConfig.provider;
-    
+
     // Create the appropriate vector store instance based on the provider
     switch (validatedConfig.provider) {
       case 'upstash':
@@ -65,11 +72,11 @@ export class VectorStore {
     // For now, return a mock implementation
     return {
       upsert: async (documents: Document[]) => {
-        console.log(`[Mock Upstash Vector] Upserting ${documents.length} documents`);
+        logger.debug(`[Mock Upstash Vector] Upserting ${documents.length} documents`);
         return { count: documents.length };
       },
       query: async (vector: number[], options?: Record<string, any>) => {
-        console.log(`[Mock Upstash Vector] Querying with vector of length ${vector.length}`);
+        logger.debug(`[Mock Upstash Vector] Querying with vector of length ${vector.length}`);
         // Return mock results
         return [
           { id: '1', text: 'Mock document 1', metadata: { source: 'mock' }, score: 0.95 },
@@ -77,7 +84,7 @@ export class VectorStore {
         ];
       },
       delete: async (ids: string[]) => {
-        console.log(`[Mock Upstash Vector] Deleting ${ids.length} documents`);
+        logger.debug(`[Mock Upstash Vector] Deleting ${ids.length} documents`);
         return { count: ids.length };
       }
     };
@@ -93,11 +100,11 @@ export class VectorStore {
     // For now, return a mock implementation
     return {
       upsert: async (documents: Document[]) => {
-        console.log(`[Mock Local Vector] Upserting ${documents.length} documents`);
+        logger.debug(`[Mock Local Vector] Upserting ${documents.length} documents`);
         return { count: documents.length };
       },
       query: async (vector: number[], options?: Record<string, any>) => {
-        console.log(`[Mock Local Vector] Querying with vector of length ${vector.length}`);
+        logger.debug(`[Mock Local Vector] Querying with vector of length ${vector.length}`);
         // Return mock results
         return [
           { id: '1', text: 'Mock document 1', metadata: { source: 'mock' }, score: 0.95 },
@@ -105,7 +112,7 @@ export class VectorStore {
         ];
       },
       delete: async (ids: string[]) => {
-        console.log(`[Mock Local Vector] Deleting ${ids.length} documents`);
+        logger.debug(`[Mock Local Vector] Deleting ${ids.length} documents`);
         return { count: ids.length };
       }
     };

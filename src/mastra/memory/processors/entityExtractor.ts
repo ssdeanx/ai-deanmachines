@@ -6,7 +6,13 @@
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../observability/logger';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the EntityExtractor processor
+const logger = createLogger({
+  name: 'Mastra-EntityExtractor',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Entity type
@@ -195,7 +201,7 @@ export class EntityExtractor implements MemoryProcessor {
       // Dates (various formats)
       {
         type: 'date',
-        pattern: /\b(?:\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?,? \d{4}|\d{4}-\d{2}-\d{2})\b/g
+        pattern: /\b(?:\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?,? \d{4}|\d{4}-\d{2}-\d{2})\b/g
       },
 
       // Times
@@ -232,7 +238,6 @@ export class EntityExtractor implements MemoryProcessor {
       }
     ];
   }
-
   /**
    * Add patterns for custom entities
    */

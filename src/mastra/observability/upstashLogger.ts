@@ -6,10 +6,10 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { UpstashLoggerConfig, LogLevel } from './types';
+import { LogLevel } from './types';
 import { DEFAULT_UPSTASH_LOGGER_CONFIG, DEFAULT_LOGGER_CONFIG } from './constants';
 import { getTracer } from './telemetry';
-import { createLogger } from './logger';
+import { createLogger } from '@mastra/core/logger';
 // Use @mastra/upstash package for all Upstash operations
 import { UpstashStore } from '@mastra/upstash';
 // Temporarily import Redis from @upstash/redis until @mastra/upstash provides a full replacement
@@ -42,12 +42,6 @@ export function createUpstashLogger(options: {
   const logger = createLogger({
     name: options.name || DEFAULT_LOGGER_CONFIG.name,
     level: (options.level || DEFAULT_LOGGER_CONFIG.level) as 'debug' | 'info' | 'warn' | 'error',
-    timestamps: true,
-    includeTraceId: true,
-    colorize: process.env.NODE_ENV !== 'production',
-    console: true,
-    file: false,
-    json: process.env.NODE_ENV === 'production',
   });
 
   // Create an Upstash store for direct access

@@ -9,23 +9,15 @@ import {
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { diag, DiagConsoleLogger, DiagLogLevel, metrics, Meter, trace } from '@opentelemetry/api';
-import { logger } from './logger';
+import { createLogger } from '@mastra/core/logger';
 import { TelemetryConfig, TelemetrySDK } from './types';
 import { DEFAULT_TELEMETRY_CONFIG, SEMRESATTRS } from './constants';
 
-// Export telemetry configuration for instrumentation
-export const telemetry = {
-  enabled: true,
-  serviceName: 'mastra-service',
-  sampling: {
-    type: 'always_on'
-  },
-  export: {
-    type: 'otlp',
-    protocol: 'http',
-    endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces'
-  }
-};
+// Create a logger instance for telemetry
+const logger = createLogger({
+  name: 'Mastra-Telemetry',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Configure and initialize OpenTelemetry

@@ -11,8 +11,14 @@ import {
   Message,
   MemoryProcessor
 } from './types';
-import { logger } from '../observability/logger';
 import { ENV, DEFAULT_MEMORY } from '../constants';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the Memory module
+const logger = createLogger({
+  name: 'Mastra-Memory',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Memory class for storing and retrieving conversation history
@@ -66,11 +72,11 @@ export class Memory {
    * @param options - Options for the Upstash Redis memory
    * @returns An Upstash Redis memory instance
    */
-  private createUpstashMemory(options?: Record<string, any>) {
+  private async createUpstashMemory(options?: Record<string, any>) {
     logger.info(`Creating Upstash memory with options: ${JSON.stringify(options)}`);
 
     // Import UpstashMemory dynamically to avoid circular dependency
-    const { UpstashMemory } = require('./upstashMemory');
+    const { UpstashMemory } = await import('./upstashMemory');
 
     // Create and return a new UpstashMemory instance with enhanced options
     return new UpstashMemory({
@@ -81,9 +87,7 @@ export class Memory {
       vectorToken: options?.vectorToken || process.env[ENV.UPSTASH_VECTOR_TOKEN],
       vectorIndex: options?.vectorIndex || options?.namespace || DEFAULT_MEMORY.NAMESPACE || 'mastra-memory'
     });
-  }
-
-  /**
+  }  /**
    * Create a local memory instance
    * @param options - Options for the local memory
    * @returns A local memory instance

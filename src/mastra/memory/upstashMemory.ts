@@ -12,8 +12,14 @@ import {
   MemoryProcessor,
   Message
 } from './types';
-import { logger } from '../observability/logger';
 import { DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_MEMORY, DEFAULT_VECTOR_SEARCH } from '../constants';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the UpstashMemory module
+const logger = createLogger({
+  name: 'Mastra-UpstashMemory',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Import for embeddings
 let pipeline: any;

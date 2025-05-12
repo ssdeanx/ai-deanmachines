@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { VectorStore, Document, QueryResult } from './vectorStore';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the UpstashVectorStore
+const logger = createLogger({
+  name: 'Mastra-UpstashVectorStore',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Define the Upstash vector store configuration schema
 export const UpstashVectorStoreConfigSchema = z.object({
@@ -32,20 +39,20 @@ export class UpstashVectorStore extends VectorStore {
 
     // Validate configuration
     const validatedConfig = UpstashVectorStoreConfigSchema.parse(config);
-    
+
     this.url = validatedConfig.url;
     this.token = validatedConfig.token;
     this.namespace = validatedConfig.namespace || 'default';
-    
+
     // TODO: Initialize Upstash Vector client
     // For now, use a mock implementation
     this.client = {
       upsert: async (documents: Document[]) => {
-        console.log(`[Upstash Vector] Upserting ${documents.length} documents to namespace ${this.namespace}`);
+        logger.debug(`[Upstash Vector] Upserting ${documents.length} documents`);
         return { count: documents.length };
       },
       query: async (vector: number[], options?: Record<string, any>) => {
-        console.log(`[Upstash Vector] Querying namespace ${this.namespace} with vector of length ${vector.length}`);
+        logger.debug(`[Upstash Vector] Querying with vector of length ${vector.length}`);
         // Return mock results
         return [
           { id: '1', text: 'Mock document 1', metadata: { source: 'upstash' }, score: 0.95 },
@@ -53,7 +60,7 @@ export class UpstashVectorStore extends VectorStore {
         ];
       },
       delete: async (ids: string[]) => {
-        console.log(`[Upstash Vector] Deleting ${ids.length} documents from namespace ${this.namespace}`);
+        logger.debug(`[Upstash Vector] Deleting ${ids.length} documents`);
         return { count: ids.length };
       }
     };
@@ -74,7 +81,7 @@ export class UpstashVectorStore extends VectorStore {
         ...doc.metadata,
       }
     }));
-    
+
     return this.client.upsert(formattedDocuments, { namespace: this.namespace });
   }
 
@@ -89,7 +96,7 @@ export class UpstashVectorStore extends VectorStore {
     const includeMetadata = options?.includeMetadata !== false;
     const includeVectors = options?.includeVectors || false;
     const filter = options?.filter;
-    
+
     const results = await this.client.query({
       vector,
       topK,
@@ -98,7 +105,7 @@ export class UpstashVectorStore extends VectorStore {
       filter,
       namespace: options?.namespace || this.namespace
     });
-    
+
     // Format results to match QueryResult interface
     return results.map((result: any) => ({
       id: result.id,

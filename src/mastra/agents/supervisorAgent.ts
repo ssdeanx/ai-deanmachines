@@ -18,12 +18,18 @@ import {
   ComplexTaskOptionsSchema
 } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../observability/logger';
 import { BaseAgent } from './baseAgent';
 
 // Import AI SDK functions
 import { generateObject, zodSchema } from 'ai';
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the SupervisorAgent
+const logger = createLogger({
+  name: 'Mastra-SupervisorAgent',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * SupervisorAgent class that extends BaseAgent with coordination capabilities

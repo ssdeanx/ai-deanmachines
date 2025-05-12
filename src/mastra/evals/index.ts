@@ -13,8 +13,14 @@ import {
   trackPerformance,
   generateRequestId
 } from './utils';
-import { logger } from '../observability/logger';
 import { getTracer } from '../observability/telemetry';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the Evaluator
+const logger = createLogger({
+  name: 'Mastra-Evaluator',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Create a tracer for the evals module
 const tracer = getTracer('mastra.evals');

@@ -6,7 +6,13 @@
  */
 
 import { Message, MemoryProcessor, MessageRole, MessageType } from '../types';
-import { logger } from '../../observability/logger';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the TemporalProcessor processor
+const logger = createLogger({
+  name: 'Mastra-TemporalProcessor',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Time window configuration

@@ -6,7 +6,13 @@
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../observability/logger';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the TokenLimiter processor
+const logger = createLogger({
+  name: 'Mastra-TokenLimiter',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Simple token counting function
@@ -30,7 +36,7 @@ export class TokenLimiter implements MemoryProcessor {
    * Create a new TokenLimiter
    * @param tokenLimit - Maximum number of tokens allowed
    */
-  constructor(tokenLimit: number = 127000) {
+  constructor(tokenLimit: number = 1000000) {
     this.tokenLimit = tokenLimit;
   }
 

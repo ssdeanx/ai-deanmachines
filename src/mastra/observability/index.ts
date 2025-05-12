@@ -14,11 +14,6 @@ export {
   recordLLMMetrics
 } from './telemetry';
 
-// Export logger
-export {
-  logger,
-  createLogger
-} from './logger';
 
 // Export Langfuse integration
 export {

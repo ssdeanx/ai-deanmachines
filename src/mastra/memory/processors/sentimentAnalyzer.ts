@@ -6,7 +6,13 @@
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../observability/logger';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the SentimentAnalyzer processor
+const logger = createLogger({
+  name: 'Mastra-SentimentAnalyzer',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * Sentiment score type

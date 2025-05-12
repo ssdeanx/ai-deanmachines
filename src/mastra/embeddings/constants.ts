@@ -15,7 +15,7 @@ export const DEFAULT_XENOVA_MODEL = 'all-MiniLM-L6-v2';
 /**
  * Default Google embedding model
  */
-export const DEFAULT_GOOGLE_EMBEDDING_MODEL = 'embedding-001';
+export const DEFAULT_GOOGLE_EMBEDDING_MODEL = 'embedding-004';
 
 /**
  * Default embedding dimensions

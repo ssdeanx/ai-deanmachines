@@ -1,4 +1,3 @@
-import { logger } from './logger';
 import {
   LangfuseConfig,
   MastraTelemetryConfig,
@@ -14,6 +13,13 @@ import { DEFAULT_LANGFUSE_CONFIG, LANGFUSE_ATTRIBUTES, TOKEN_COST_RATES } from '
 import { Langfuse } from 'langfuse';
 // Import Zod for schema validation
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for Langfuse integration
+const logger = createLogger({
+  name: 'Mastra-Langfuse',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 // Zod schemas for validation
 const LangfuseConfigSchema = z.object({

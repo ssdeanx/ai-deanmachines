@@ -17,8 +17,14 @@ import {
   ConfidenceEvaluationSchema
 } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../observability/logger';
 import { BaseAgent } from './baseAgent';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the WorkerAgent
+const logger = createLogger({
+  name: 'Mastra-WorkerAgent',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 
 /**
  * WorkerAgent class that extends BaseAgent with domain-specific expertise

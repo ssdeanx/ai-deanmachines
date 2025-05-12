@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.0.3] - 2025-05-12 06:54:02 EST
+
+### Fixed
+
+- Logger implementation across all modules:
+  - Removed all imports of logger from '../observability/logger'
+  - Replaced with direct imports from '@mastra/core/logger'
+  - Added individual logger instances with appropriate names in each file
+  - Set proper log levels based on environment (production vs. development)
+  - Fixed circular dependency issues with logger imports
+  - Replaced all console.log statements with appropriate logger calls
+  - Updated logger usage in memory module and processors
+  - Updated logger usage in knowledge module
+  - Updated logger usage in embeddings module
+  - Updated logger usage in evals module and metrics
+  - Ensured consistent logger naming conventions across all modules
+  - Added proper error handling with logger.error calls
+  - Improved debug logging with logger.debug calls
+  - Enhanced info logging with logger.info calls
+  - Added warning logging with logger.warn calls
+
+- Upstash Logger implementation:
+  - Simplified logger creation to use only required parameters
+  - Removed redundant configuration options
+  - Fixed potential circular dependency issues
+
+- Observability module:
+  - Updated index.ts to export only createLogger from '@mastra/core/logger'
+  - Removed redundant logger export to prevent circular dependencies
+  - Ensured consistent logger usage across all observability components
+
 ## [v0.0.2] - 2025-05-11 22:19:31 UTC
 
 ### Added

@@ -15,10 +15,16 @@ import {
   MultimodalMessageSchema
 } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../observability/logger';
 import { BaseAgent } from './baseAgent';
 import { generateObject, zodSchema } from 'ai';
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the GoogleAgent
+const logger = createLogger({
+  name: 'Mastra-GoogleAgent',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 /**
  * GoogleAgent class that extends BaseAgent with Google Gemini-specific functionality
  * Provides enhanced capabilities for multimodal processing and Google-specific features

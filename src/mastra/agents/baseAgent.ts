@@ -12,12 +12,18 @@ import {
   MessageTypeSchema
 } from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../observability/logger';
 import { Memory } from '../memory';
 import { getTracer, recordLLMMetrics } from '../observability/telemetry';
 import { simpleTokenCounter, calculateCost } from '../evals/utils';
 import { streamText, generateText } from 'ai';
 import { z } from 'zod';
+import { createLogger } from '@mastra/core/logger';
+
+// Create a logger instance for the BaseAgent
+const logger = createLogger({
+  name: 'Mastra-BaseAgent',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+});
 /**
  * BaseAgent class that serves as the foundation for all agent types
  * Provides core functionality for interacting with LLMs and managing memory
