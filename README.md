@@ -129,3 +129,63 @@ ISC
 - Google AI
 - Upstash
 - Xenova Transformers
+
+```mermaid
+graph TD
+
+    subgraph 7390["External Services & Platforms"]
+        7421["Upstash Redis<br>Key-Value Store, SaaS"]
+        7422["Upstash Vector DB<br>Vector Database, SaaS"]
+        7423["Google Cloud AI Platform<br>LLM &amp; Embedding Services, SaaS"]
+        7424["Langfuse Platform<br>LLM Observability, SaaS"]
+    end
+    subgraph 7391["Example Clients / SDK Usage"]
+        7420["Agent Demo Script<br>TypeScript"]
+    end
+    subgraph 7392["Mastra AI System"]
+        7401["Mastra Orchestrator<br>TypeScript"]
+        7402["Core System Definitions<br>TypeScript"]
+        subgraph 7393["Evaluation Subsystem"]
+            7418["Evaluation Framework Core &amp; Types<br>TypeScript"]
+            7419["Evaluation Metrics Suite<br>TypeScript"]
+        end
+        subgraph 7394["Observability Subsystem"]
+            7416["Telemetry &amp; Logging Service<br>TypeScript, OpenTelemetry"]
+            7417["Langfuse Adapter<br>TypeScript, Langfuse SDK"]
+        end
+        subgraph 7395["Knowledge & Embeddings Subsystem"]
+            7412["Knowledge Store Logic &amp; Types<br>TypeScript"]
+            7413["Upstash VectorDB Adapter<br>TypeScript, Upstash Vector Client"]
+            7414["Embedding Service &amp; Types<br>TypeScript"]
+            7415["Xenova Embedding Engine<br>TypeScript, Transformers.js"]
+        end
+        subgraph 7396["Memory Subsystem"]
+            7409["Memory Core Logic &amp; Types<br>TypeScript"]
+            7410["Upstash Memory Adapter<br>TypeScript, Redis Client"]
+            7411["Memory Content Processors<br>TypeScript"]
+        end
+        subgraph 7397["Agent Subsystem"]
+            7406["Base Agent Logic<br>TypeScript"]
+            7407["Specialized Agent Implementations<br>TypeScript"]
+            7408["Agent Configuration &amp; Types<br>TypeScript"]
+        end
+        subgraph 7398["Configuration Subsystem"]
+            7403["System Configuration Loader<br>TypeScript"]
+            7404["Model &amp; Provider Configuration<br>TypeScript"]
+            7405["Agent Definition &amp; Behavior Config<br>TypeScript"]
+        end
+    end
+    subgraph 7399["User Interaction"]
+        7400["Developer / Integrator<br>External Actor"]
+    end
+    %% Edges at this level (grouped by source)
+    7400["Developer / Integrator<br>External Actor"] -->|develops with / runs| 7420["Agent Demo Script<br>TypeScript"]
+    7410["Upstash Memory Adapter<br>TypeScript, Redis Client"] -->|stores data in| 7421["Upstash Redis<br>Key-Value Store, SaaS"]
+    7416["Telemetry &amp; Logging Service<br>TypeScript, OpenTelemetry"] -->|can log to| 7421["Upstash Redis<br>Key-Value Store, SaaS"]
+    7417["Langfuse Adapter<br>TypeScript, Langfuse SDK"] -->|sends data to| 7424["Langfuse Platform<br>LLM Observability, SaaS"]
+    7406["Base Agent Logic<br>TypeScript"] -->|interacts with LLM via| 7423["Google Cloud AI Platform<br>LLM &amp; Embedding Services, SaaS"]
+    7404["Model &amp; Provider Configuration<br>TypeScript"] -->|defines connection to| 7423["Google Cloud AI Platform<br>LLM &amp; Embedding Services, SaaS"]
+    7413["Upstash VectorDB Adapter<br>TypeScript, Upstash Vector Client"] -->|stores/retrieves vectors in| 7422["Upstash Vector DB<br>Vector Database, SaaS"]
+    7414["Embedding Service &amp; Types<br>TypeScript"] -->|uses for Google embeddings| 7423["Google Cloud AI Platform<br>LLM &amp; Embedding Services, SaaS"]
+    7418["Evaluation Framework Core &amp; Types<br>TypeScript"] -->|may use LLMs for evaluation via| 7423["Google Cloud AI Platform<br>LLM &amp; Embedding Services, SaaS"]
+```

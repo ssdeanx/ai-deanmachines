@@ -6,15 +6,10 @@
  */
 
 import { BaseAgent } from './baseAgent';
-import { SupervisorAgentConfigSchema, ComplexTaskOptionsSchema, Subtask, SubtaskResult } from './types';
+import { SupervisorAgentConfigSchema, AgentType } from './types';
 import { createLogger } from '@mastra/core/logger';
-import { DefinedAgentConfig } from '../config/agentConfig';
-import { DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES, AgentType } from './constants';
-import { generateObject } from 'ai';
-import { google } from '@ai-sdk/google';
-import { Agent } from '@mastra/core';
-import { z } from 'zod';
-import crypto from 'crypto';
+import { DefinedAgentConfig, DefinedAgentConfigSchema } from '../config/agentConfig';
+import { DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
 
 // Create a logger instance for the SupervisorAgent
 const logger = createLogger({
@@ -28,25 +23,17 @@ const logger = createLogger({
  */
 export class SupervisorAgent extends BaseAgent {
   private workerAgents: BaseAgent[];
-  private threadId?: string;
 
   /**
    * Create a new SupervisorAgent instance
-   * @param config - Configuration for the supervisor agent
+   * @param config - Configuration for the supervisor agent, now using DefinedAgentConfig
    */
   constructor(config: DefinedAgentConfig) {
     const supervisorSpecificConfig = {
       ...config,
-      id: config.id || crypto.randomUUID(),
       type: AgentType.SUPERVISOR,
       instructions: config.instructions || DEFAULT_INSTRUCTIONS.SUPERVISOR,
       modelName: config.modelName || DEFAULT_MODEL_NAMES.GEMINI_PRO,
-      agentLLMConfig: {
-        modelInstanceId: config.modelName || DEFAULT_MODEL_NAMES.GEMINI_PRO,
-        maxTokens: config.maxTokens,
-        temperature: config.temperature,
-        topP: config.topP
-      }
     };
 
     // Validate configuration
@@ -54,27 +41,26 @@ export class SupervisorAgent extends BaseAgent {
     logger.info(`Creating SupervisorAgent with name: ${validatedConfig.name}`);
 
     // Call parent constructor with validated config
-    super({
-      ...validatedConfig,
-      id: supervisorSpecificConfig.id, // Ensure id is a string
-      agentLLMConfig: supervisorSpecificConfig.agentLLMConfig
-    });
+    super(validatedConfig);
 
     // Initialize worker agents array
-    this.workerAgents = (validatedConfig as any).workerAgents || [];
+    this.workerAgents = validatedConfig.workerAgents || [];
 
     logger.info(`SupervisorAgent ${validatedConfig.name} created successfully with ${this.workerAgents.length} worker agents`);
+  }
 
-  }  /**
+  /**
    * Add a worker agent to the supervisor
    * @param agent - Worker agent to add
    * @returns The supervisor agent instance for chaining
-   */  addWorkerAgent(agent: BaseAgent): SupervisorAgent {
+   */
+  addWorkerAgent(agent: BaseAgent) {
     logger.info(`Adding worker agent to supervisor: ${agent.getAgent().name}`);
     this.workerAgents.push(agent);
     logger.debug(`Worker agent added successfully. Total worker agents: ${this.workerAgents.length}`);
     return this;
   }
+
 
   /**
    * Get the Agent instance
@@ -96,7 +82,7 @@ export class SupervisorAgent extends BaseAgent {
    * Get all worker agents
    * @returns Array of worker agents
    */
-  getWorkerAgents(): BaseAgent[] {
+  getWorkerAgents() {
     return this.workerAgents;
   }
 
@@ -106,7 +92,7 @@ export class SupervisorAgent extends BaseAgent {
    * @param task - Task to delegate
    * @returns Response from the worker agent
    */
-  async delegateToWorker(agentIndex: number, task: string): Promise<any> {
+  async delegateToWorker(agentIndex: number, task: string) {
     if (agentIndex < 0 || agentIndex >= this.workerAgents.length) {
       logger.error(`Invalid worker agent index: ${agentIndex}. Available workers: ${this.workerAgents.length}`);
       throw new Error(`Invalid worker agent index: ${agentIndex}`);
@@ -128,13 +114,11 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Process a complex task by breaking it down, delegating to workers, and synthesizing results
    * @param input - User input describing the complex task
-   * @param options - Options for complex task processing
    * @returns Synthesized response from all worker agents
    */
-  async processComplexTask(input: string, options: z.infer<typeof ComplexTaskOptionsSchema> = {}): Promise<any> {
+  async processComplexTask(input: string, options: ComplexTaskOptions = {}) {
     // Validate options with Zod
     const validatedOptions = ComplexTaskOptionsSchema.parse(options);
-    
     if (this.workerAgents.length === 0) {
       logger.warn('Attempted to process complex task with no worker agents');
       throw new Error('No worker agents available for delegation');
@@ -180,6 +164,7 @@ Respond with a JSON object containing an array of subtasks, each with:
       let subtasks: Subtask[] = [];
 
       // Use generateObject from the 'ai' package to get a structured plan
+      // Import SubtaskSchema from types.ts and add descriptions
       const PlanSchema = z.object({
         subtasks: z.array(
           z.object({
@@ -194,9 +179,11 @@ Respond with a JSON object containing an array of subtasks, each with:
       try {
         // Generate a structured plan using generateObject
         const { object: plan } = await generateObject({
-          model: google(this.getModelName()),
-          schema: PlanSchema,
-          prompt: planPrompt
+          model: google(this.modelName),
+          temperature: 0.2, // Lower temperature for more logical planning
+          schema: zodSchema(PlanSchema),
+          prompt: planPrompt,
+          schemaDescription: 'A plan for breaking down a complex task into subtasks assigned to worker agents'
         });
 
         logger.debug('Task breakdown plan generated using structured object generation');
@@ -207,21 +194,33 @@ Respond with a JSON object containing an array of subtasks, each with:
         logger.warn(`Structured plan generation failed: ${structuredPlanError}`);
 
         // Fall back to traditional text generation
-        const planningPrompt = `${planPrompt}\n\nPlease respond with a valid JSON object.`;
-        const planResponse = await this.generate(planningPrompt, {
-          temperature: 0.2 // Lower temperature for more logical planning
+        // Use the Agent class directly for plan generation
+        const planningAgent = new Agent({
+          name: this.getAgent().name,
+          instructions: `You are a planning agent specialized in breaking down complex tasks into subtasks.`,
+          model: google(this.modelName),
+          memory: this.memory?.getMemoryInstance?.()
         });
-        
+
+        const planResponse = await planningAgent.generate(planPrompt, {
+          temperature: 0.2, // Lower temperature for more logical planning
+          maxTokens: 2000 // Allow for detailed planning
+        });
+        logger.debug('Task breakdown plan generated using traditional text generation');
+
+        // Parse the plan and extract subtasks
         try {
           // Extract JSON from the response
-          const jsonMatch = planResponse.text.match(/(?:json)?\s*([\s\S]*?)\s*/) ||
+          const jsonMatch = planResponse.text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ||
                            planResponse.text.match(/\{[\s\S]*?\}/);
 
           if (jsonMatch) {
             const jsonStr = jsonMatch[1] || jsonMatch[0];
             const plan = JSON.parse(jsonStr);
             subtasks = plan.subtasks || [];
-            
+            logger.debug(`Extracted ${subtasks.length} subtasks from plan`);
+
+            // Validate subtasks
             if (subtasks.length === 0) {
               throw new Error('No subtasks found in the plan');
             }
@@ -241,7 +240,8 @@ Respond with a JSON object containing an array of subtasks, each with:
               }
             });
           } else {
-            throw new Error('Failed to extract JSON plan from response');
+            logger.warn('Failed to extract JSON plan from response');
+            throw new Error('Failed to parse task breakdown plan');
           }
         } catch (parseError) {
           logger.error(`Error parsing task plan: ${parseError}`);
@@ -266,9 +266,11 @@ Respond with a JSON object containing an array of subtasks, each with:
       const errors: Error[] = [];
 
       // Execute subtasks with potential parallel processing if enabled
-      const subtaskResults = validatedOptions.parallel
-        ? await Promise.all(subtasks.map(subtask => this.executeSubtask(subtask)))
-        : await this.executeSubtasksSequentially(subtasks);
+      const executeSubtasks = validatedOptions.parallel ?
+        Promise.all(subtasks.map((subtask) => this.executeSubtask(subtask))) :
+        this.executeSubtasksSequentially(subtasks);
+
+      const subtaskResults = await executeSubtasks;
 
       // Process results and errors
       subtaskResults.forEach(result => {
@@ -307,49 +309,54 @@ Please provide a comprehensive and coherent response that addresses the original
 by integrating all the subtask results.
       `;
 
-      // Generate synthesis using the current agent
-      const synthesisResponse = await this.generate(synthesisPrompt, {
-        temperature: validatedOptions.temperature || 0.4,
-        maxTokens: validatedOptions.maxTokens || 2500
+      // Use the Agent class directly for synthesis
+      const synthesisAgent = new Agent({
+        name: this.getAgent().name,
+        instructions: `You are a synthesis agent specialized in integrating results from multiple subtasks into a coherent response.`,
+        model: google(this.modelName),
+        memory: this.memory?.getMemoryInstance?.()
       });
+
+      const synthesisResponse = await synthesisAgent.generate(synthesisPrompt, {
+        temperature: validatedOptions.temperature || 0.4, // Moderate temperature for creative synthesis
+        maxTokens: validatedOptions.maxTokens || 2500 // Allow for detailed synthesis
+      });
+      logger.debug('Synthesis of subtask results completed');
 
       // Store the task and response in memory if available
       if (this.memory && this.threadId) {
         try {
-          const userMetadata = {
-            taskType: 'complex',
-            subtaskCount: subtasks.length,
-            timestamp: new Date().toISOString()
+          // Create user message
+          const userMessage = {
+            content: input,
+            role: 'user' as const,
+            type: 'text' as const,
+            metadata: {
+              taskType: 'complex',
+              subtaskCount: subtasks.length,
+              timestamp: new Date().toISOString()
+            }
           };
 
-          const assistantMetadata = {
-            taskType: 'complex_synthesis',
-            subtaskCount: subtasks.length,
-            successfulSubtasks: results.length,
-            failedSubtasks: errors.length,
-            timestamp: new Date().toISOString()
-          };
+          // Store user message
+          await (this.memory as any).addMessage(this.threadId, userMessage);
 
-          await this.memory.addMessage(
-            this.threadId, 
-            input,
-            'user',
-            'text',
-            userMetadata, // metadata (5th argument)
-            'user',       // role (6th argument)
-            'text'        // type (7th argument)
-          );
+          // Create assistant message
+          const assistantMessage = {
+            content: synthesisResponse.text,
+            role: 'assistant' as const,
+            type: 'text' as const,
+            metadata: {
+              taskType: 'complex_synthesis',
+              subtaskCount: subtasks.length,
+              successfulSubtasks: results.length,
+              failedSubtasks: errors.length,
+              timestamp: new Date().toISOString()
+            }
+          };
 
           // Store assistant message
-          await this.memory.addMessage(
-            this.threadId,
-            synthesisResponse.text,
-            'assistant',
-            'text',
-            assistantMetadata, // metadata (5th argument)
-            'assistant',       // role (6th argument)
-            'text'             // type (7th argument)
-          );
+          await (this.memory as any).addMessage(this.threadId, assistantMessage);
         } catch (memoryError) {
           logger.warn(`Failed to store complex task in memory: ${memoryError}`);
         }
@@ -366,7 +373,7 @@ by integrating all the subtask results.
         const directProcessingAgent = new Agent({
           name: this.getAgent().name,
           instructions: `You are a direct processing agent that handles tasks without breaking them down.`,
-          model: google(this.getModelName()),
+          model: google(this.modelName),
           memory: this.memory?.getMemoryInstance?.()
         });
 
@@ -381,11 +388,12 @@ by integrating all the subtask results.
         throw error; // Throw the original error
       }
     }
-  }  /**
+  }
+
+  /**
    * Execute a single subtask
    * @param subtask - Subtask to execute
    * @returns Result of the subtask execution
-   * @private
    */
   private async executeSubtask(subtask: Subtask): Promise<SubtaskResult> {
     try {
@@ -415,7 +423,6 @@ by integrating all the subtask results.
    * Execute subtasks sequentially in priority order
    * @param subtasks - Subtasks to execute
    * @returns Results of the subtask executions
-   * @private
    */
   private async executeSubtasksSequentially(subtasks: Subtask[]): Promise<SubtaskResult[]> {
     const results: SubtaskResult[] = [];

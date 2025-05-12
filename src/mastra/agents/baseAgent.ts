@@ -22,6 +22,7 @@ import { Memory } from '../memory';
 import { DefinedAgentConfig } from '../config/agentConfig';
 import { getModelInstance } from '../config/models';
 import { getTracer, recordLLMMetrics } from '../observability/telemetry';
+import { SpanKind } from '@opentelemetry/api';
 import { AgentType, DEFAULT_INSTRUCTIONS, TOOL_CATEGORIES } from './constants';
 import { 
   StreamOptionsSchema, 
@@ -32,6 +33,12 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
+// FUTURE_IMPORT: Import tool-related modules here
+// import { ToolRegistry, ToolExecutor } from '../tools';
+
+// FUTURE_IMPORT: Import vector database modules here
+// import { VectorDB, EmbeddingService } from '../vectordb';
+
 // Create a logger instance for the BaseAgent
 const logger = createLogger({
   name: 'Mastra-BaseAgent',
@@ -41,8 +48,10 @@ const logger = createLogger({
 /**
  * Interface for tool call payload
  */
-interface ToolCallPayload {
+export interface ToolCallPayload {
+  /** Name of the tool to call */
   name: string;
+  /** Arguments to pass to the tool */
   args: Record<string, any>;
 }
 
@@ -62,16 +71,22 @@ export type AgentMiddleware = (
  * Runtime context for agent operations
  */
 export interface RuntimeContext {
+  /** Unique identifier for the conversation thread */
   threadId?: string;
+  /** Unique identifier for the resource being processed */
   resourceId?: string;
+  /** Additional metadata for the operation */
   metadata?: Record<string, any>;
+  /** Additional context properties */
   [key: string]: any;
 }
 
 /**
  * BaseAgent class that provides core functionality for all agent types
  * 
- * Foundation class for all Mastra agents with common functionality
+ * @class BaseAgent
+ * @description Foundation class for all Mastra agents with common functionality for LLM interactions,
+ * tool execution, memory management, and middleware processing.
  */
 export class BaseAgent {
   /** Name of the agent */
@@ -88,6 +103,9 @@ export class BaseAgent {
   
   /** Array of tools available to the agent */
   protected tools: ToolConfig[] = [];
+  
+  // FUTURE_PROPERTY: Vector database instance
+  // protected vectorDB?: VectorDB;
   
   /** Type of agent (e.g., CHAT, ASSISTANT, etc.) */
   protected type: AgentType;
@@ -106,11 +124,15 @@ export class BaseAgent {
   
   /** Middleware functions to process inputs before sending to the model */
   private middlewares: AgentMiddleware[] = [];
+  
+  // FUTURE_PROPERTY: Tool registry for managing tools
+  // private toolRegistry?: ToolRegistry;
 
   /**
-   * Create a new BaseAgent instance
+   * Creates a new BaseAgent instance
    * 
    * @param config - Configuration for the agent
+   * @throws {Error} When configuration validation fails
    */
   constructor(config: DefinedAgentConfig) {
     this.name = config.name;
@@ -127,6 +149,12 @@ export class BaseAgent {
 
     if (config.memory) this.memory = new Memory(config.memory);
     if (config.tools) this.tools = config.tools;
+    
+    // FUTURE_INITIALIZATION: Initialize vector database if configured
+    // if (config.vectorDB) this.vectorDB = new VectorDB(config.vectorDB);
+    
+    // FUTURE_INITIALIZATION: Initialize tool registry
+    // this.toolRegistry = new ToolRegistry(this.tools);
 
     this.agent = new MastraAgent({
       name: this.name,
@@ -140,15 +168,23 @@ export class BaseAgent {
   }
 
   /**
-   * Stream a response from the agent
+   * Streams a response from the agent
    * 
    * @param input - User input to process
    * @param options - Stream options
-   * @returns Stream response
+   * @returns An async iterable response with the generated text
+   * @throws {Error} When streaming fails and fallback is unsuccessful
    */
   async stream(input: string, options: any = {}) {
     const tracer = getTracer('mastra.agent.stream');
-    const span = tracer.startSpan(this.name);
+    const span = tracer.startSpan(`${this.name}.stream`, {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        'input.length': input.length,
+        'options': JSON.stringify(options)
+      },
+      startTime: Date.now()
+    });
 
     const opts = StreamOptionsSchema.parse(options);
     const resourceId = opts.resourceId || uuidv4();
@@ -171,20 +207,30 @@ export class BaseAgent {
         timestamp: Date.now()
       });
       
-      await this.memory.addMessage(threadId, userMessage);
+      await this.memory.addMessage(threadId, userMessage.content, userMessage.role, userMessage.type, {
+        taskType: 'user_input',
+        subtaskCount: 1,
+        timestamp: new Date().toISOString()
+      }, userMessage.role, userMessage.type);
     }
 
     try {
       // Get conversation history if memory is available
       let messages: Message[] = [];
       if (this.memory && threadId) {
-        const history = await this.memory.getConversationHistory(threadId, { limit: opts.messageLimit || 10 });
-        messages = history.map(msg => ({
+        const history = await this.memory.getMessages(threadId, 10);
+        messages = history.map((msg: { role: any; content: any; type: string; }) => ({
           role: msg.role as any,
           content: msg.content,
           ...(msg.type !== 'text' ? { type: msg.type } : {})
         }));
       }
+      
+      // FUTURE_FEATURE: Enhance with vector database context retrieval
+      // if (this.vectorDB) {
+      //   const relevantContext = await this.vectorDB.search(processedInput.input);
+      //   processedInput.input = `Context: ${relevantContext}\n\nQuery: ${processedInput.input}`;
+      // }
       
       // Use the agent's stream method
       const response = await this.agent.stream(processedInput.input, { 
@@ -193,6 +239,18 @@ export class BaseAgent {
         threadId,
         messages
       });
+
+      // Make response iterable
+      const asyncIterableResponse = {
+        ...response,
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              return { done: true, value: response.text };
+            }
+          };
+        }
+      };
       
       // Store the assistant's response in memory if available
       if (this.memory && response.text) {
@@ -204,18 +262,22 @@ export class BaseAgent {
           timestamp: Date.now()
         });
         
-        await this.memory.addMessage(threadId, assistantMessage);
+         await this.memory.addMessage(threadId, assistantMessage.content, assistantMessage.role, assistantMessage.type, {
+          taskType: 'assistant_response',
+          subtaskCount: 1,
+          timestamp: new Date().toISOString()
+        }, assistantMessage.role, assistantMessage.type);
       }
       
       recordLLMMetrics({ modelName: this.sdkModel.modelIdString, operationType: 'stream' });
-      return response;
+      return asyncIterableResponse;
     } catch (error) {
       logger.error(`Error streaming response: ${error}`);
       
       // Fallback to direct streaming using the AI package
       try {
         logger.info('Attempting fallback streaming with AI package');
-        const stream = await streamText({
+        const stream = streamText({
           model: this.sdkModel,
           prompt: processedInput.input,
           temperature: this.temperature,
@@ -224,8 +286,8 @@ export class BaseAgent {
         
         // Collect the full text from the stream
         let fullText = '';
-        for await (const chunk of stream) {
-          fullText += chunk.text;
+        for await (const chunk of stream.textStream) {
+          fullText += chunk;
         }
         
         // Store in memory if available
@@ -238,10 +300,24 @@ export class BaseAgent {
             timestamp: Date.now()
           });
           
-          await this.memory.addMessage(threadId, assistantMessage);
-        }
-        
-        return { text: fullText, fallback: true };
+          await this.memory.addMessage(threadId, assistantMessage.content, assistantMessage.role, assistantMessage.type, {
+          taskType: 'assistant_response',
+          subtaskCount: 1,
+          timestamp: new Date().toISOString()
+        }, assistantMessage.role, assistantMessage.type);
+      }
+
+        return {
+          text: fullText,
+          fallback: true,
+          [Symbol.asyncIterator]() {
+            return {
+              async next() {
+                return { done: true, value: fullText };
+              }
+            };
+          }
+        };
       } catch (fallbackError) {
         logger.error(`Fallback streaming failed: ${fallbackError}`);
         throw error; // Throw the original error
@@ -250,16 +326,26 @@ export class BaseAgent {
       span.end();
     }
   }
+
   /**
-   * Generate a complete response from the agent
+   * Generates a complete response from the agent
    * 
    * @param input - User input to process
    * @param options - Generation options
    * @returns Complete response
+   * @throws {Error} When generation fails and fallback is unsuccessful
    */
   async generate(input: string, options: any = {}) {
     const tracer = getTracer('mastra.agent.generate');
-    const span = tracer.startSpan(this.name);
+
+    const span = tracer.startSpan(`${this.name}.generate`, {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        'input.length': input.length,
+        'options': JSON.stringify(options)
+      },
+      startTime: Date.now()
+    });
 
     const opts = GenerateOptionsSchema.parse(options);
     const resourceId = opts.resourceId || uuidv4();
@@ -282,96 +368,116 @@ export class BaseAgent {
         timestamp: Date.now()
       });
       
-      await this.memory.addUserMessage(threadId, userMessage);
+      await this.memory.addMessage(threadId, userMessage.content, userMessage.role, userMessage.type, {
+        taskType: 'user_input',
+        subtaskCount: 1,
+        timestamp: new Date().toISOString()
+      }, userMessage.role, userMessage.type);
     }
+
+    // FUTURE_FEATURE: Enhance with vector database context retrieval
+    // if (this.vectorDB) {
+    //   const relevantContext = await this.vectorDB.search(processedInput.input);
+    //   processedInput.input = `Context: ${relevantContext}\n\nQuery: ${processedInput.input}`;
+    // }
 
     try {
       // Get conversation history if memory is available
       let messages: Message[] = [];
       if (this.memory && threadId) {
-        const history = await this.memory.getConversationHistory(threadId, { limit: opts.messageLimit || 10 });
-        messages = history.map(msg => ({
+        // Rely on the default limit in getMessages, as opts.limit is not defined on GenerateOptionsSchema
+        const history = await this.memory.getMessages(threadId); 
+        messages = history.map((msg: { role: any; content: any; type: string; }) => ({
           role: msg.role as any,
           content: msg.content,
-          ...(msg.type !== 'text' ? { type: msg.type } : {})
-        }));
-      }
-      
-      // Use the agent's generate method
-      const resp = await this.agent.generate(processedInput.input, { 
-        ...processedInput.options, 
-        resourceId, 
-        threadId,
-        messages
-      });
-      
-      // Store the assistant's response in memory if available
-      if (this.memory && resp.text) {
-        // Create a properly formatted message object
-        const assistantMessage = MessageSchema.parse({
-          content: resp.text,
-          role: 'assistant',
-          type: 'text',
-          timestamp: Date.now()
+            ...(msg.type !== 'text' ? { type: msg.type } : {})
+          }));
+        }
+        
+        // Use the agent's generate method
+        const resp = await this.agent.generate(processedInput.input, { 
+          ...processedInput.options, 
+          resourceId, 
+          threadId,
+          messages
         });
         
-        await this.memory.addAssistantMessage(threadId, assistantMessage);
-      }
-      
-      recordLLMMetrics({ 
-        modelName: this.sdkModel.modelIdString, 
-        operationType: 'generate',
-        promptTokens: resp.usage?.promptTokens,
-        completionTokens: resp.usage?.completionTokens,
-        totalTokens: resp.usage?.totalTokens
-      });
-      
-      return resp;
-    } catch (error) {
-      logger.error(`Error generating response: ${error}`);
-      
-      // Fallback to direct generation using the AI package if agent fails
-      try {
-        logger.info('Attempting fallback generation with AI package');
-        const fallbackResponse = await generateText({
-          model: this.sdkModel,
-          prompt: processedInput.input,
-          temperature: this.temperature,
-          maxTokens: this.maxTokens
-        });
-        
-        // Store in memory if available
-        if (this.memory && fallbackResponse.text) {
+        // Store the assistant's response in memory if available
+        if (this.memory && resp.text) {
           // Create a properly formatted message object
           const assistantMessage = MessageSchema.parse({
-            content: fallbackResponse.text,
+            content: resp.text,
             role: 'assistant',
             type: 'text',
             timestamp: Date.now()
           });
           
-          await this.memory.addAssistantMessage(threadId, assistantMessage);
+          await this.memory.addMessage(threadId, assistantMessage.content, assistantMessage.role, assistantMessage.type, {
+            taskType: 'assistant_response',
+            subtaskCount: 1,
+            timestamp: new Date().toISOString()
+          }, assistantMessage.role, assistantMessage.type);
         }
         
-        return { text: fallbackResponse.text, fallback: true };
-      } catch (fallbackError) {
-        logger.error(`Fallback generation failed: ${fallbackError}`);
-        throw error; // Throw the original error
+        recordLLMMetrics({ 
+          modelName: this.sdkModel.modelIdString, 
+          operationType: 'generate',
+          promptTokens: resp.usage?.promptTokens,
+          completionTokens: resp.usage?.completionTokens,
+          totalTokens: resp.usage?.totalTokens
+        });
+        
+        return resp;
+      } catch (error) {
+        logger.error(`Error generating response: ${error}`);
+        
+        // Fallback to direct generation using the AI package if agent fails
+        try {
+          logger.info('Attempting fallback generation with AI package');
+          const fallbackResponse = await generateText({
+            model: this.sdkModel,
+            prompt: processedInput.input,
+            temperature: this.temperature,
+            maxTokens: this.maxTokens
+          });
+          
+          // Store in memory if available
+          if (this.memory && fallbackResponse.text) {
+            // Create a properly formatted message object
+            const assistantMessage = MessageSchema.parse({
+              content: fallbackResponse.text,
+              role: 'assistant',
+              type: 'text',
+              timestamp: Date.now()
+            });
+            
+            await this.memory.addMessage(threadId, assistantMessage.content, assistantMessage.role, assistantMessage.type, {
+            taskType: 'assistant_response',
+            subtaskCount: 1,
+            timestamp: new Date().toISOString()
+          }, assistantMessage.role, assistantMessage.type);
+        }
+          
+          return { text: fallbackResponse.text, fallback: true };
+        } catch (fallbackError) {
+          logger.error(`Fallback generation failed: ${fallbackError}`);
+          throw error; // Throw the original error
+        }
+      } finally {
+        span.end();
       }
-    } finally {
-      span.end();
-    }
   }
 
   /**
-   * Generate a structured object response from the agent
+   * Generates a structured object response from the agent
    * 
+   * @template T - The Zod schema type
    * @param input - User input to process
    * @param schema - Zod schema for the structured output
    * @param options - Generation options
    * @returns Structured object response
-   */
-  async generateStructured<T extends z.ZodType>(
+
+   */  async generateStructured<T extends z.ZodType>(
     input: string, 
     schema: T, 
     options: any = {}
@@ -407,11 +513,12 @@ export class BaseAgent {
   }
   
   /**
-   * Execute a tool call
+   * Executes a tool call
    * 
-   * @param toolCall - Tool call payload
+   * @param toolCall - Tool call payload with name and arguments
    * @param context - Runtime context for tool execution
-   * @returns Tool execution result
+   * @returns The result of the tool execution
+   * @throws {Error} When the tool is not found or execution fails
    */
   async executeTool(
     toolCall: ToolCallPayload, 
@@ -458,7 +565,10 @@ export class BaseAgent {
         
         await this.memory.addMessage(
           context.threadId,
-          toolMessage,
+          toolMessage.content,
+          'tool',
+          'tool-result',
+          { taskType: 'tool', subtaskCount: 1, timestamp: new Date().toISOString() },
           'tool',
           'tool-result'
         );
@@ -478,6 +588,9 @@ export class BaseAgent {
             error: error instanceof Error ? error.message : String(error)
           }),
           'tool',
+          'tool-result',
+          { taskType: 'tool', subtaskCount: 1, timestamp: new Date().toISOString() },
+          'tool',
           'tool-result'
         );
       }
@@ -489,7 +602,7 @@ export class BaseAgent {
   }
 
   /**
-   * Apply middleware to input and options
+   * Applies middleware to input and options
    * 
    * @param input - Original input
    * @param options - Original options
@@ -504,8 +617,8 @@ export class BaseAgent {
     let messages: Message[] = [];
     if (this.memory && options.threadId) {
       try {
-        const history = await this.memory.getMessages(options.threadId, { limit: options.messageLimit || 10 });
-        messages = history.map(msg => ({
+        const history = await this.memory.getMessages(options.threadId, options.limit || 10);
+        messages = history.map((msg: { role: any; content: any; type: string; }) => ({
           role: msg.role as any,
           content: msg.content,
           ...(msg.type !== 'text' ? { type: msg.type } : {})
@@ -542,7 +655,7 @@ export class BaseAgent {
   }
 
   /**
-   * Add a middleware function to the agent
+   * Adds a middleware function to the agent
    * 
    * @param middleware - Middleware function to add
    * @returns The agent instance for chaining
@@ -554,7 +667,7 @@ export class BaseAgent {
   }
 
   /**
-   * Remove a middleware function from the agent
+   * Removes a middleware function from the agent
    * 
    * @param middleware - Middleware function to remove
    * @returns The agent instance for chaining
@@ -569,7 +682,7 @@ export class BaseAgent {
   }
 
   /**
-   * Clear all middleware functions from the agent
+   * Clears all middleware functions from the agent
    * 
    * @returns The agent instance for chaining
    */
@@ -580,20 +693,28 @@ export class BaseAgent {
   }
 
   /**
-   * Add a tool to the agent
+   * Adds a tool to the agent
    * 
-   * @param tool - Tool to add
+   * @param tool - Tool configuration to add
    * @returns The agent instance for chaining
    */
   public addTool(tool: ToolConfig): this {
     this.tools.push(tool);
-    this.agent.registerTool(tool);
+    // Re-instantiate the agent with the updated tools array
+    this.agent = new MastraAgent({
+      name: this.name,
+      instructions: this.agent.getInstructions ? (() => this.agent.getInstructions() as string) : DEFAULT_INSTRUCTIONS.BASE,
+      model: this.sdkModel,
+      tools: this.tools.length
+        ? this.tools.reduce((acc, t) => ({ ...acc, [t.name]: t }), {})
+        : undefined
+    });
     logger.debug(`Added tool ${tool.name} to agent ${this.name}`);
     return this;
   }
 
   /**
-   * Remove a tool from the agent
+   * Removes a tool from the agent
    * 
    * @param toolName - Name of the tool to remove
    * @returns The agent instance for chaining
@@ -609,7 +730,7 @@ export class BaseAgent {
   }
 
   /**
-   * Get the underlying Mastra agent instance
+   * Gets the underlying Mastra agent instance
    * 
    * @returns The Mastra agent instance
    */
@@ -618,16 +739,16 @@ export class BaseAgent {
   }
 
   /**
-   * Get the model name used by this agent
+   * Gets the model name used by this agent
    * 
-   * @returns Model name
+   * @returns The model name as a string
    */
   public getModelName(): string {
     return this.sdkModel.modelIdString;
   }
 
   /**
-   * Get the tools available to this agent
+   * Gets the tools available to this agent
    * 
    * @param params - Parameters for tool retrieval
    * @returns Available tools
@@ -637,7 +758,7 @@ export class BaseAgent {
   }
 
   /**
-   * Get the model used by this agent
+   * Gets the model used by this agent
    * 
    * @param params - Parameters for model retrieval
    * @returns Model information
@@ -647,17 +768,17 @@ export class BaseAgent {
   }
 
   /**
-   * Get the instructions used by this agent
+   * Gets the instructions used by this agent
    * 
    * @param params - Parameters for instructions retrieval
-   * @returns Agent instructions
+   * @returns Agent instructions as a string
    */
   public async getInstructions(params: { runtimeContext?: any } = {}): Promise<string> {
     return this.agent.getInstructions(params);
   }
 
   /**
-   * Get the underlying Mastra agent instance
+   * Gets the underlying Mastra agent instance
    * 
    * @returns The Mastra agent instance
    */
@@ -666,7 +787,7 @@ export class BaseAgent {
   }
 
   /**
-   * Get the memory instance used by this agent
+   * Gets the memory instance used by this agent
    * 
    * @returns Memory instance or undefined if not configured
    */
@@ -675,18 +796,18 @@ export class BaseAgent {
   }
 
   /**
-   * Get the agent type
+   * Gets the agent type
    * 
-   * @returns Agent type
+   * @returns The agent type enum value
    */
   public getAgentType(): AgentType {
     return this.type;
   }
 
   /**
-   * Get the agent configuration parameters
+   * Gets the agent configuration parameters
    * 
-   * @returns Agent configuration parameters
+   * @returns Object containing agent configuration parameters
    */
   public getConfig(): Record<string, any> {
     return {
@@ -704,7 +825,7 @@ export class BaseAgent {
   }
 
   /**
-   * Check if the agent has a specific capability
+   * Checks if the agent has a specific capability
    * 
    * @param capability - Capability to check
    * @returns True if the agent has the capability, false otherwise
@@ -730,7 +851,7 @@ export class BaseAgent {
   }
 
   /**
-   * Reset the agent's state
+   * Resets the agent's state
    * 
    * @param options - Reset options
    * @returns The agent instance for chaining
