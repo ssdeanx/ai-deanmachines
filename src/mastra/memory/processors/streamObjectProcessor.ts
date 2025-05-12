@@ -5,7 +5,7 @@
  * It can transform, filter, or enhance stream objects before they're processed further.
  */
 // never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -101,20 +101,15 @@ export class StreamObjectProcessor extends MemoryProcessor {
             // Set the content to the extracted text
             processedMessage.content = transformedContent[this.textContentField] as string;
 
-            // Store metadata in annotations if available
+            // Store original and transformed content in metadata
             if (this.preserveOriginalContent) {
-              const annotation = {
+              processedMessage.metadata = processedMessage.metadata || {};
+              const meta = processedMessage.metadata as any;
+              meta.streamObjectAnnotations = meta.streamObjectAnnotations || [];
+              meta.streamObjectAnnotations.push({
                 originalContent: message.content,
-                transformedContent: transformedContent
-              };
-
-              // Add to annotations if supported
-              if (Array.isArray(processedMessage.annotations)) {
-                processedMessage.annotations.push(annotation);
-              } else {
-                // Create annotations array if it doesn't exist
-                processedMessage.annotations = [annotation];
-              }
+                transformedContent,
+              });
             }
           } else {
             // Just update the content with the transformed object

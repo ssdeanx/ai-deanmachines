@@ -1,11 +1,14 @@
 /**
- * PriorityRanker processor for Mastra memory
- *
+ * @file PriorityRanker processor for Mastra memory
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
  * This processor ranks messages by importance and keeps only the most important ones
  * when context window size is limited.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -18,8 +21,11 @@ const logger = createLogger({
 /**
  * PriorityRanker processor for memory messages
  * Ranks messages by importance and keeps only the most important ones
+ * 
+ * @class PriorityRanker
+ * @extends {MemoryProcessor}
  */
-export class PriorityRanker implements MemoryProcessor {
+export class PriorityRanker extends MemoryProcessor {
   private maxMessages: number;
   private preserveSystemMessages: boolean;
   private preserveRecentMessages: number;
@@ -34,7 +40,17 @@ export class PriorityRanker implements MemoryProcessor {
 
   /**
    * Create a new PriorityRanker
-   * @param options - Configuration options
+   * @param {Object} [options={}] - Configuration options
+   * @param {number} [options.maxMessages=50] - Maximum number of messages to keep
+   * @param {boolean} [options.preserveSystemMessages=true] - Whether to always preserve system messages
+   * @param {number} [options.preserveRecentMessages=5] - Number of most recent messages to always preserve
+   * @param {Object} [options.importanceFactors] - Factors to consider when ranking messages
+   * @param {number} [options.importanceFactors.recency=0.5] - Weight for message recency
+   * @param {Record<string, number>} [options.importanceFactors.role] - Weights for different message roles
+   * @param {Record<string, number>} [options.importanceFactors.type] - Weights for different message types
+   * @param {number} [options.importanceFactors.length=0.2] - Weight for message length
+   * @param {string[]} [options.importanceFactors.keywords=[]] - Keywords to prioritize
+   * @param {number} [options.importanceFactors.keywordWeight=0.8] - Weight for keyword matches
    */
   constructor(options: {
     maxMessages?: number;
@@ -49,6 +65,7 @@ export class PriorityRanker implements MemoryProcessor {
       keywordWeight?: number;
     };
   } = {}) {
+    super({ name: 'PriorityRanker' });
     this.maxMessages = options.maxMessages || 50;
     this.preserveSystemMessages = options.preserveSystemMessages !== false;
     this.preserveRecentMessages = options.preserveRecentMessages || 5;
@@ -75,22 +92,27 @@ export class PriorityRanker implements MemoryProcessor {
 
   /**
    * Process messages by ranking and filtering based on importance
-   * @param messages - Array of messages to process
-   * @returns Filtered array of messages
+   * @param {CoreMessage[]} messages - Array of messages to process
+   * @param {MemoryProcessorOpts} [opts={}] - MemoryProcessor options
+   * @returns {CoreMessage[]} Filtered array of messages
+   * @override
    */
-  process(messages: Message[]): Message[] {
+  process(messages: CoreMessage[], opts: MemoryProcessorOpts = {}): CoreMessage[] {
     if (!messages || messages.length === 0 || messages.length <= this.maxMessages) {
       return messages;
     }
+
+    // Use opts to satisfy base signature
+    void opts;
 
     logger.debug(`PriorityRanker: Ranking ${messages.length} messages by importance`);
 
     // Sort messages by timestamp (oldest first)
     const sortedMessages = [...messages].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
-                   a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
-                   b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = (a as any).timestamp ? new Date((a as any).timestamp).getTime() :
+                   (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+      const bTime = (b as any).timestamp ? new Date((b as any).timestamp).getTime() :
+                   (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
       return aTime - bTime;
     });
 
@@ -101,12 +123,12 @@ export class PriorityRanker implements MemoryProcessor {
 
     // Always preserve the most recent messages
     const recentMessages = sortedMessages.slice(-this.preserveRecentMessages);
-    const recentIds = new Set(recentMessages.map(m => m.id));
+    const recentIds = new Set(recentMessages.map(m => (m as any).id));
 
     // Calculate importance scores for remaining messages
     const messagesToRank = sortedMessages.filter(m =>
       (!this.preserveSystemMessages || m.role !== 'system') &&
-      !recentIds.has(m.id)
+      !recentIds.has((m as any).id)
     );
 
     // Calculate importance score for each message
@@ -116,7 +138,7 @@ export class PriorityRanker implements MemoryProcessor {
     });
 
     // Sort by importance score (highest first)
-    scoredMessages.sort((a, b) => b._importanceScore - a._importanceScore);
+    scoredMessages.sort((a, b) => (b as any)._importanceScore - (a as any)._importanceScore);
 
     // Take top messages up to the limit (accounting for system and recent messages)
     const remainingSlots = this.maxMessages - systemMessages.length - recentMessages.length;
@@ -128,10 +150,10 @@ export class PriorityRanker implements MemoryProcessor {
       ...topMessages,
       ...recentMessages
     ].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
-                   a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
-                   b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = (a as any).timestamp ? new Date((a as any).timestamp).getTime() :
+                   (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+      const bTime = (b as any).timestamp ? new Date((b as any).timestamp).getTime() :
+                   (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
       return aTime - bTime;
     });
 
@@ -141,12 +163,13 @@ export class PriorityRanker implements MemoryProcessor {
 
   /**
    * Calculate importance score for a message
-   * @param message - Message to score
-   * @param index - Index of the message in the array
-   * @param array - Array of all messages
-   * @returns Importance score between 0 and 1
+   * @param {CoreMessage} message - Message to score
+   * @param {number} index - Index of the message in the array
+   * @param {CoreMessage[]} array - Array of all messages
+   * @returns {number} Importance score between 0 and 1
+   * @private
    */
-  private calculateImportance(message: Message, index: number, array: Message[]): number {
+  private calculateImportance(message: CoreMessage, index: number, array: CoreMessage[]): number {
     let score = 0;
 
     // Factor 1: Role importance
@@ -154,7 +177,7 @@ export class PriorityRanker implements MemoryProcessor {
     score += roleScore;
 
     // Factor 2: Type importance
-    const typeScore = this.importanceFactors.type[message.type] || 0.5;
+    const typeScore = this.importanceFactors.type[(message as any).type] || 0.5;
     score += typeScore;
 
     // Factor 3: Recency (more recent = more important)

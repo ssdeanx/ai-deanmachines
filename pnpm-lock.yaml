@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@ai-sdk/google':
-        specifier: ^1.2.17
-        version: 1.2.17(zod@3.24.4)
+        specifier: ^1.2.18
+        version: 1.2.18(zod@3.24.4)
       '@ai-sdk/provider':
         specifier: ^1.1.3
         version: 1.1.3
@@ -21,8 +21,8 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0
       '@elastic/elasticsearch':
-        specifier: ^9.0.1
-        version: 9.0.1
+        specifier: ^8.4.0
+        version: 8.18.2
       '@googleapis/customsearch':
         specifier: ^3.2.0
         version: 3.2.0
@@ -37,7 +37,7 @@ importers:
         version: 0.48.0
       '@langchain/community':
         specifier: ^0.3.42
-        version: 0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@elastic/elasticsearch@9.0.1)(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.3)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)
+        version: 0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@elastic/elasticsearch@8.18.2)(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.3)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)
       '@langchain/core':
         specifier: ^0.3.55
         version: 0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))
@@ -51,8 +51,8 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1
       '@mastra/core':
-        specifier: 0.9.4-alpha.1
-        version: 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+        specifier: 0.9.4-alpha.2
+        version: 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/evals':
         specifier: ^0.1.22
         version: 0.1.22(ai@4.3.15(react@19.1.0)(zod@3.24.4))(openapi-types@12.1.3)(react@19.1.0)
@@ -63,8 +63,8 @@ importers:
         specifier: ^1.1.22
         version: 1.1.22(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/libsql':
-        specifier: 0.0.4-alpha.1
-        version: 0.0.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+        specifier: 0.0.4-alpha.2
+        version: 0.0.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/loggers':
         specifier: ^0.1.22
         version: 0.1.22(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
@@ -72,14 +72,14 @@ importers:
         specifier: ^0.4.3
         version: 0.4.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/memory':
-        specifier: 0.3.4-alpha.1
-        version: 0.3.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)
+        specifier: 0.3.4-alpha.2
+        version: 0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/rag':
         specifier: ^0.1.22
         version: 0.1.22(ai@4.3.15(react@19.1.0)(zod@3.24.4))(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/server':
         specifier: ^2.0.3
-        version: 2.0.3(@mastra/core@0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))
+        version: 2.0.3(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))
       '@mastra/store-upstash':
         specifier: ^0.0.5
         version: 0.0.5(react@19.1.0)
@@ -337,8 +337,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       mastra:
-        specifier: 0.6.3-alpha.1
-        version: 0.6.3-alpha.1(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
+        specifier: 0.6.3-alpha.2
+        version: 0.6.3-alpha.2(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -348,8 +348,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/google@1.2.17':
-    resolution: {integrity: sha512-mLFLDMCJaDK+j1nvoqeNszazSZIyeSMPi5X+fs5Wh3xWZljGGE0WmFg32RNkFujRB+UnM63EnhPG70WdqOx/MA==}
+  '@ai-sdk/google@1.2.18':
+    resolution: {integrity: sha512-8B70+i+uB12Ae6Sn6B9Oc6W0W/XorGgc88Nx0pyUrcxFOdytHBaAVhTPqYsO3LLClfjYN8pQ9GMxd5cpGEnUcA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.0.0
@@ -735,12 +735,12 @@ packages:
     resolution: {integrity: sha512-9uO8Q5Hfhi6f2rSt0lcshLyhNF6pfh+36StE1dO8RrcMwi3F7MNSyWhKm0/KV9AJjviLZ8lSFFlwXi5/iKyLEA==}
     engines: {node: '>=18'}
 
-  '@elastic/elasticsearch@9.0.1':
-    resolution: {integrity: sha512-V/Hj/ePRiC6H8vOQF4GfOGIUFjYyA2C1Je6qKBD20AShmxqkaTRAQSvia4tvLobHqjrljUzb6khfhDuPrb6E8g==}
+  '@elastic/elasticsearch@8.18.2':
+    resolution: {integrity: sha512-2pOc/hGdxkbaDavfAlnUfjJdVsFRCGqg7fpsWJfJ2UzpgViIyojdViHg8zOCT1J14lAwvDgb9CNETWa3SBZRfw==}
     engines: {node: '>=18'}
 
-  '@elastic/transport@9.0.1':
-    resolution: {integrity: sha512-6jVZQzAe2iTRsZA6I/wkO2BjzJFD9BHTASo2YgGfbcoV95ey/8D/ABRhpgfg35LIDrmialIGJBizunSwxsRDLg==}
+  '@elastic/transport@8.9.6':
+    resolution: {integrity: sha512-v71jgmZtgPg2ouXF5KTPxU1a6z7YYc8nazAS7jLySteC/vrShs1OJh6oEEeo5oDc19MYUofV/JV1h5vqJVBXOw==}
     engines: {node: '>=18'}
 
   '@emnapi/runtime@1.4.3':
@@ -1948,14 +1948,14 @@ packages:
     peerDependencies:
       zod: ^3.24.0
 
-  '@mastra/core@0.9.4-alpha.1':
-    resolution: {integrity: sha512-dv+tteocb1iN4XVQP561RtCkc6xszfxTO6QTSATz/lzaAwp4agEeN6k/a6PPxwUbXQKhjvCGpC3eQEViM4QOGg==}
+  '@mastra/core@0.9.4-alpha.2':
+    resolution: {integrity: sha512-AVhaP23D7VuenyFV/vxAllxTjWdNZthpMuy9n/NaYqmySYXDY4zrH4TJj4m0hzgZ43b5KXN73DriqEbMYROiiQ==}
     engines: {node: '>=20'}
     peerDependencies:
       zod: ^3.0.0
 
-  '@mastra/deployer@0.3.4-alpha.1':
-    resolution: {integrity: sha512-RDo+UnGtlYutJS8/NmvtdNhU211HhL4lcIQkgSjoNdHCBNSqNCg4PWJ3trwwDNNb845MDgIaZTpwkuEqyHO57A==}
+  '@mastra/deployer@0.3.4-alpha.2':
+    resolution: {integrity: sha512-0NMm/UaBupR/i1Bgn7FMI2TSNqRE2yOVeeaV1H7H2My0SlrY/XcmnDaVfvBU1vruT1ot0xiQwqkfsxvJ5DiI6w==}
 
   '@mastra/evals@0.1.22':
     resolution: {integrity: sha512-nvC0oEYV588n4u68FtezVz1+sUH4rFzBK2PHOCCbbyTz240gikGRzI+CLxm3rnvXgr6qWqruk0rPfTTtJrAKPg==}
@@ -1970,8 +1970,8 @@ packages:
     resolution: {integrity: sha512-JPMNljuHgOOWMeODM8+EJGl/FpfVFuZq1VeUiVcl7D5wVa+ihVzXRpHMFSRyovJmjdTRT5vSdIv4HGMh14UBuQ==}
     engines: {node: '>=20'}
 
-  '@mastra/libsql@0.0.4-alpha.1':
-    resolution: {integrity: sha512-dlF6Dw+YMXAFwePb7+7cup379G8zqYw0Its4j+pZW7/kTHFEjxoTi/2w9WCNrlNBFENOdjINaBBpIbmaTlIpOw==}
+  '@mastra/libsql@0.0.4-alpha.2':
+    resolution: {integrity: sha512-LbJN1rvVNLa1IjVBC+dW5DQSJmaWtTWSORoII3EQ+uN8jyk2C6kxjx3fzuzxSeWC6sWpen1guU/vH6H/hfSGKA==}
 
   '@mastra/loggers@0.1.22':
     resolution: {integrity: sha512-2KEYB8qAKkLJ2mcVaWwlGS4datfGw6wM4vSVHeRfIYX9AYWWiB+jsBrqvOqTYvTiUqbfs8LeHz8sqyD7WqXKvA==}
@@ -1979,8 +1979,8 @@ packages:
   '@mastra/mcp@0.4.3':
     resolution: {integrity: sha512-dT6NCbGegBCYJsr5OQAU48jHI7KtNaFXRpPRHkUENX7/ykRDHlGMAUKOOadMIXdgjI8FHo2dJsLFj9rgN0iNsg==}
 
-  '@mastra/memory@0.3.4-alpha.1':
-    resolution: {integrity: sha512-RzDTiAoj92Cfzio+1/KuZIYUV51UYzJ7A/CmcKy9r0Z4Z5SkaeCUup4F5DsuzX78Nt3PruKI+gDFyAHFtDvKlw==}
+  '@mastra/memory@0.3.4-alpha.2':
+    resolution: {integrity: sha512-GdoN8VTPTt+nrgqp2cycWS4vIcaVjKMbRTQdnCqz+L0ruGBv4ghCQtwH9p8PgBCk+5tF0IZFhuw8KDwMCaJqCQ==}
 
   '@mastra/rag@0.1.22':
     resolution: {integrity: sha512-FvfpKqxpCXl0OTFnUau97KFesj24Xufhi3fEqmN5yT617i101FMDk/L2N0U9tQrjK8hsq+rXk50WUbSA3S6XKw==}
@@ -1992,10 +1992,10 @@ packages:
     peerDependencies:
       '@mastra/core': ^0.9.3
 
-  '@mastra/server@2.0.4-alpha.1':
-    resolution: {integrity: sha512-wyvFaNpU2TgOprspPjSM3XAG5h1M9xi4AEPJOV/DcK7u1Hp+TO4VjvU3nSGVA/827HmVk61SH4b7BKF1Xe3S5A==}
+  '@mastra/server@2.0.4-alpha.2':
+    resolution: {integrity: sha512-W0rfvdLS6nFg8H0E1ex2nUxVYBNmU7B2/CYbD8Jp6jHGxtNkidO64yONQE+Jw3wHfWOQY60XFxJEPUk8Ok8Keg==}
     peerDependencies:
-      '@mastra/core': ^0.9.4-alpha.1
+      '@mastra/core': ^0.9.4-alpha.2
       zod: ^3.0.0
 
   '@mastra/store-upstash@0.0.5':
@@ -6525,10 +6525,12 @@ packages:
 
   libsql@0.4.7:
     resolution: {integrity: sha512-T9eIRCs6b0J1SHKYIvD8+KCJMcWZ900iZyxdnSCdqxN12Z1ijzT+jY5nrk72Jw4B0HGzms2NgpryArlJqvc3Lw==}
+    cpu: [x64, arm64, wasm32]
     os: [darwin, linux, win32]
 
   libsql@0.5.9:
     resolution: {integrity: sha512-FzhiExE9uiMAOa8kmiUzsIOsIwv+YiMzaEFXEq26OSpdSJREOEa13XT/N2NzJkMFOROKN+z4IBkNrcp1oQAjpQ==}
+    cpu: [x64, arm64, wasm32, arm]
     os: [darwin, linux, win32]
 
   lie@3.3.0:
@@ -6629,8 +6631,8 @@ packages:
     engines: {node: '>= 18'}
     hasBin: true
 
-  mastra@0.6.3-alpha.1:
-    resolution: {integrity: sha512-QE0r42lKZd689W7st7JIPjtrBMljg2IEOVgGTMRrrK7eLakU4Yt37gis4W8HESxFCZqg0gEljLw0U12eMjzCfg==}
+  mastra@0.6.3-alpha.2:
+    resolution: {integrity: sha512-D9P3mh03npjd+aMJh9qa5HvxUQk5NzaJVkp0qoj0sCytqHxbHKEvVqgbUmv5gZwNoixAga3oGWPHAlb1XSFyoQ==}
     hasBin: true
 
   matcher@3.0.0:
@@ -8044,10 +8046,6 @@ packages:
     resolution: {integrity: sha512-uROZWze0R0itiAKVPsYhFov9LxrPMHLMEQFszeI2gCN6bnIIZ8twzBCJcN2LJrBBLfrP0t1FW0g+JmKVl8Vk1g==}
     engines: {node: '>=18.17'}
 
-  undici@7.9.0:
-    resolution: {integrity: sha512-e696y354tf5cFZPXsF26Yg+5M63+5H3oE6Vtkh2oqbvsE2Oe7s2nIbcQh5lmG7Lp/eS29vJtTpw9+p6PX0qNSg==}
-    engines: {node: '>=20.18.1'}
-
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
@@ -8372,7 +8370,7 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/google@1.2.17(zod@3.24.4)':
+  '@ai-sdk/google@1.2.18(zod@3.24.4)':
     dependencies:
       '@ai-sdk/provider': 1.1.3
       '@ai-sdk/provider-utils': 2.2.8(zod@3.24.4)
@@ -9123,16 +9121,16 @@ snapshots:
     dependencies:
       e2b: 1.4.0
 
-  '@elastic/elasticsearch@9.0.1':
+  '@elastic/elasticsearch@8.18.2':
     dependencies:
-      '@elastic/transport': 9.0.1
+      '@elastic/transport': 8.9.6
       apache-arrow: 19.0.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - '@75lb/nature'
       - supports-color
 
-  '@elastic/transport@9.0.1':
+  '@elastic/transport@8.9.6':
     dependencies:
       '@opentelemetry/api': 1.9.0
       debug: 4.4.0(supports-color@8.1.1)
@@ -9140,7 +9138,7 @@ snapshots:
       ms: 2.1.3
       secure-json-parse: 3.0.2
       tslib: 2.8.1
-      undici: 7.9.0
+      undici: 6.21.2
     transitivePeerDependencies:
       - supports-color
 
@@ -9823,7 +9821,7 @@ snapshots:
       '@lukeed/ms': 2.0.2
       bytes: 3.1.2
 
-  '@langchain/community@0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@elastic/elasticsearch@9.0.1)(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.3)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)':
+  '@langchain/community@0.3.42(@aws-crypto/sha256-js@5.2.0)(@aws-sdk/credential-provider-node@3.806.0)(@browserbasehq/sdk@2.5.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4))(@elastic/elasticsearch@8.18.2)(@ibm-cloud/watsonx-ai@1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))))(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(@langchain/google-genai@0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@libsql/client@0.14.0)(@smithy/util-utf8@2.3.0)(@upstash/redis@1.34.9)(@upstash/vector@1.2.1)(axios@1.9.0)(cheerio@1.0.0)(cohere-ai@7.17.1)(crypto-js@4.2.0)(fast-xml-parser@5.2.3)(google-auth-library@9.15.1)(ibm-cloud-sdk-core@5.3.2)(ignore@5.3.2)(jsdom@26.1.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.9.0)(neo4j-driver@5.28.1)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(pdf-parse@1.1.1)(pg@8.15.6)(playwright@1.52.0)(redis@4.7.1)(ws@8.18.2)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(openai@4.98.0(ws@8.18.2)(zod@3.24.4))(zod@3.24.4)
       '@ibm-cloud/watsonx-ai': 1.6.4(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))
@@ -9844,7 +9842,7 @@ snapshots:
       '@aws-crypto/sha256-js': 5.2.0
       '@aws-sdk/credential-provider-node': 3.806.0
       '@browserbasehq/sdk': 2.5.0
-      '@elastic/elasticsearch': 9.0.1
+      '@elastic/elasticsearch': 8.18.2
       '@libsql/client': 0.14.0
       '@smithy/util-utf8': 2.3.0
       '@upstash/redis': 1.34.9
@@ -10152,7 +10150,7 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/core@0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
+  '@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
     dependencies:
       '@libsql/client': 0.14.0
       '@opentelemetry/api': 1.9.0
@@ -10204,12 +10202,12 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/deployer@0.3.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)':
+  '@mastra/deployer@0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)':
     dependencies:
       '@babel/core': 7.27.1
       '@babel/helper-module-imports': 7.27.1
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
-      '@mastra/server': 2.0.4-alpha.1(@mastra/core@0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/server': 2.0.4-alpha.2(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)
       '@neon-rs/load': 0.1.82
       '@rollup/plugin-alias': 5.1.1(rollup@4.40.2)
       '@rollup/plugin-commonjs': 28.0.3(rollup@4.40.2)
@@ -10336,10 +10334,10 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/libsql@0.0.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
+  '@mastra/libsql@0.0.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
     dependencies:
       '@libsql/client': 0.15.5
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
     transitivePeerDependencies:
       - '@hono/arktype-validator'
       - '@hono/effect-validator'
@@ -10414,9 +10412,9 @@ snapshots:
       - zod
       - zod-openapi
 
-  '@mastra/memory@0.3.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)':
+  '@mastra/memory@0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@upstash/redis': 1.34.9
       ai: 4.3.15(react@19.1.0)(zod@3.24.4)
       js-tiktoken: 1.0.20
@@ -10476,13 +10474,13 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/server@2.0.3(@mastra/core@0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))':
+  '@mastra/server@2.0.3(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
 
-  '@mastra/server@2.0.4-alpha.1(@mastra/core@0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)':
+  '@mastra/server@2.0.4-alpha.2(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       zod: 3.24.4
 
   '@mastra/store-upstash@0.0.5(react@19.1.0)':
@@ -16127,12 +16125,12 @@ snapshots:
 
   marked@15.0.11: {}
 
-  mastra@0.6.3-alpha.1(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3):
+  mastra@0.6.3-alpha.2(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3):
     dependencies:
       '@clack/prompts': 0.8.2
       '@lukeed/uuid': 2.0.1
-      '@mastra/core': 0.9.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
-      '@mastra/deployer': 0.3.4-alpha.1(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
+      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/deployer': 0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.0)
       '@webcontainer/env': 1.1.1
       commander: 12.1.0
@@ -17706,8 +17704,6 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici@6.21.2: {}
-
-  undici@7.9.0: {}
 
   unicorn-magic@0.3.0: {}
 

@@ -1,11 +1,14 @@
 /**
- * SentimentAnalyzer processor for Mastra memory
- *
- * This processor analyzes the sentiment of messages and adds sentiment
- * information as metadata or annotations.
+ * @file SentimentAnalyzer processor for Mastra memory
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
+ * This processor analyzes the sentiment of messages and adds sentiment scores
+ * to message metadata for use in memory processing and agent responses.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -16,94 +19,96 @@ const logger = createLogger({
 });
 
 /**
- * Sentiment score type
+ * Sentiment score interface
+ * @interface SentimentScore
+ * @property {number} positive - Positive sentiment score (0-1)
+ * @property {number} negative - Negative sentiment score (0-1)
+ * @property {number} neutral - Neutral sentiment score (0-1)
+ * @property {string} overall - Overall sentiment classification ('positive', 'negative', 'neutral')
+ * @property {number} compound - Compound sentiment score (-1 to 1)
  */
 export interface SentimentScore {
-  score: number;  // -1 to 1 (negative to positive)
-  label: 'negative' | 'neutral' | 'positive';
-  confidence: number;  // 0 to 1
+  positive: number;
+  negative: number;
+  neutral: number;
+  overall: 'positive' | 'negative' | 'neutral';
+  compound: number;
+}
+
+/**
+ * Sentiment analysis options
+ * @interface SentimentAnalysisOptions
+ * @property {boolean} [addToMetadata=true] - Whether to add sentiment scores to message metadata
+ * @property {boolean} [addToContent=false] - Whether to add sentiment annotations to message content
+ * @property {string[]} [applyToRoles=['user', 'assistant']] - Message roles to analyze
+ * @property {number} [positiveThreshold=0.05] - Threshold for positive sentiment classification
+ * @property {number} [negativeThreshold=-0.05] - Threshold for negative sentiment classification
+ */
+export interface SentimentAnalysisOptions {
+  addToMetadata?: boolean;
+  addToContent?: boolean;
+  applyToRoles?: string[];
+  positiveThreshold?: number;
+  negativeThreshold?: number;
 }
 
 /**
  * SentimentAnalyzer processor for memory messages
- * Analyzes the sentiment of messages
+ * Analyzes sentiment of messages and adds scores to metadata
+ * 
+ * @class SentimentAnalyzer
+ * @extends {MemoryProcessor}
  */
-export class SentimentAnalyzer implements MemoryProcessor {
-  private addSentimentAnnotations: boolean;
-  private extractToMetadata: boolean;
-  private analyzeUserMessages: boolean;
-  private analyzeAssistantMessages: boolean;
-  private analyzeSystemMessages: boolean;
-  private analyzeToolMessages: boolean;
-  private positiveThreshold: number;
-  private negativeThreshold: number;
-  private sentimentWords: {
-    positive: string[];
-    negative: string[];
-    intensifiers: string[];
-  };
+export class SentimentAnalyzer extends MemoryProcessor {
+  private options: SentimentAnalysisOptions;
+  private applyToRoles: Set<string>;
+  private positiveWords: Set<string>;
+  private negativeWords: Set<string>;
+  private intensifiers: Set<string>;
+  private negators: Set<string>;
 
   /**
    * Create a new SentimentAnalyzer
-   * @param options - Configuration options
+   * @param {SentimentAnalysisOptions} [options={}] - Configuration options
    */
-  constructor(options: {
-    addSentimentAnnotations?: boolean;
-    extractToMetadata?: boolean;
-    analyzeUserMessages?: boolean;
-    analyzeAssistantMessages?: boolean;
-    analyzeSystemMessages?: boolean;
-    analyzeToolMessages?: boolean;
-    positiveThreshold?: number;
-    negativeThreshold?: number;
-    sentimentWords?: {
-      positive?: string[];
-      negative?: string[];
-      intensifiers?: string[];
+  constructor(options: SentimentAnalysisOptions = {}) {
+    super({ name: 'SentimentAnalyzer' });
+    this.options = {
+      addToMetadata: options.addToMetadata !== false,
+      addToContent: options.addToContent || false,
+      positiveThreshold: options.positiveThreshold || 0.05,
+      negativeThreshold: options.negativeThreshold || -0.05
     };
-  } = {}) {
-    this.addSentimentAnnotations = options.addSentimentAnnotations !== false;
-    this.extractToMetadata = options.extractToMetadata !== false;
-    this.analyzeUserMessages = options.analyzeUserMessages !== false;
-    this.analyzeAssistantMessages = options.analyzeAssistantMessages !== false;
-    this.analyzeSystemMessages = options.analyzeSystemMessages || false;
-    this.analyzeToolMessages = options.analyzeToolMessages || false;
-    this.positiveThreshold = options.positiveThreshold || 0.05;
-    this.negativeThreshold = options.negativeThreshold || -0.05;
-
-    // Initialize sentiment word lists
-    this.sentimentWords = {
-      positive: options.sentimentWords?.positive || this.getDefaultPositiveWords(),
-      negative: options.sentimentWords?.negative || this.getDefaultNegativeWords(),
-      intensifiers: options.sentimentWords?.intensifiers || this.getDefaultIntensifiers()
-    };
+    this.applyToRoles = new Set(options.applyToRoles || ['user', 'assistant']);
+    
+    // Initialize sentiment lexicons
+    this.positiveWords = new Set(this.getPositiveWords());
+    this.negativeWords = new Set(this.getNegativeWords());
+    this.intensifiers = new Set(this.getIntensifiers());
+    this.negators = new Set(this.getNegators());
   }
 
   /**
    * Process messages by analyzing sentiment
-   * @param messages - Array of messages to process
-   * @returns Processed array of messages
+   * @param {CoreMessage[]} messages - Array of messages to process
+   * @param {MemoryProcessorOpts} [opts={}] - MemoryProcessor options
+   * @returns {CoreMessage[]} Processed array of messages with sentiment analysis
+   * @override
    */
-  process(messages: CoreMessage[], _opts: MemoryProcessorOpts): CoreMessage[] {
+  process(messages: CoreMessage[], opts: MemoryProcessorOpts = {}): CoreMessage[] {
     if (!messages || messages.length === 0) {
       return messages;
     }
 
-    logger.debug(`SentimentAnalyzer: Processing ${messages.length} messages`);
+    // Use opts to satisfy base signature
+    void opts;
 
+    logger.debug(`SentimentAnalyzer: Analyzing ${messages.length} messages`);
+
+    // Process each message
     return messages.map(message => {
-      // Skip messages based on role configuration
-      if (
-        (message.role === 'user' && !this.analyzeUserMessages) ||
-        (message.role === 'assistant' && !this.analyzeAssistantMessages) ||
-        (message.role === 'system' && !this.analyzeSystemMessages) ||
-        (message.role === 'tool' && !this.analyzeToolMessages)
-      ) {
-        return message;
-      }
-
-      // Skip non-string content
-      if (typeof message.content !== 'string') {
+      // Skip messages with non-string content or not in applyToRoles
+      if (typeof message.content !== 'string' || !this.applyToRoles.has(message.role)) {
         return message;
       }
 
@@ -113,160 +118,204 @@ export class SentimentAnalyzer implements MemoryProcessor {
       // Create a copy of the message to modify
       const processedMessage = { ...message };
 
-      // Add sentiment to message metadata
-      if (this.extractToMetadata) {
-        processedMessage.metadata = processedMessage.metadata || {};
-        processedMessage.metadata.sentiment = sentiment;
-        processedMessage._sentiment = sentiment; // For backward compatibility
+      // Add sentiment to metadata if configured
+      if (this.options.addToMetadata) {
+        (processedMessage as any).metadata = (processedMessage as any).metadata || {};
+        (processedMessage as any).metadata.sentiment = sentiment;
       }
 
-      // Add sentiment annotations to content if configured
-      if (this.addSentimentAnnotations) {
-        processedMessage.content = this.annotateContent(message.content, sentiment);
+      // Add sentiment annotation to content if configured
+      if (this.options.addToContent) {
+        processedMessage.content = this.addSentimentAnnotation(message.content, sentiment);
       }
 
       return processedMessage;
     });
   }
+
   /**
    * Analyze sentiment of text content
-   * @param content - Text content to analyze
-   * @returns Sentiment score
+   * @param {string} content - Text content to analyze
+   * @returns {SentimentScore} Sentiment analysis results
+   * @private
    */
   private analyzeSentiment(content: string): SentimentScore {
-    // Normalize text: lowercase and remove punctuation
-    const normalizedText = content.toLowerCase().replace(/[^\w\s]/g, '');
-    const words = normalizedText.split(/\s+/);
+    // Tokenize and normalize text
+    const words = content.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 0);
 
-    // Count sentiment words
-    let positiveCount = 0;
-    let negativeCount = 0;
-    let intensifierCount = 0; // Used to track intensity for potential future enhancements
+    if (words.length === 0) {
+      return {
+        positive: 0,
+        negative: 0,
+        neutral: 1,
+        overall: 'neutral',
+        compound: 0
+      };
+    }
 
+    let positiveScore = 0;
+    let negativeScore = 0;
+    let negationActive = false;
+    let intensifierActive = 1;
+
+    // Analyze each word
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-
+      
+      // Check for negators
+      if (this.negators?.has(word)) {
+        negationActive = true;
+        continue;
+      }
+      
       // Check for intensifiers
-      const isIntensified = i > 0 && this.sentimentWords.intensifiers.includes(words[i - 1]);
-      const intensifierMultiplier = isIntensified ? 2 : 1;
-
-      // Count intensifiers (useful for calculating overall intensity)
-      if (this.sentimentWords.intensifiers.includes(word)) {
-        intensifierCount++;
+      if (this.intensifiers?.has(word)) {
+        intensifierActive = 1.5;
+        continue;
       }
-
-      // Count positive words
-      if (this.sentimentWords.positive.includes(word)) {
-        positiveCount += intensifierMultiplier;
+      
+      // Check sentiment
+      if (this.positiveWords?.has(word)) {
+        if (negationActive) {
+          negativeScore += 1 * intensifierActive;
+        } else {
+          positiveScore += 1 * intensifierActive;
+        }
+      } else if (this.negativeWords?.has(word)) {
+        if (negationActive) {
+          positiveScore += 0.5 * intensifierActive; // Negated negative is less positive
+        } else {
+          negativeScore += 1 * intensifierActive;
+        }
       }
-
-      // Count negative words
-      if (this.sentimentWords.negative.includes(word)) {
-        negativeCount += intensifierMultiplier;
+      
+      // Reset modifiers after 3 words or at punctuation
+      if (i > 0 && (i % 3 === 0 || word.match(/[.!?;]/))) {
+        negationActive = false;
+        intensifierActive = 1;
       }
     }
 
-    // Calculate sentiment score
-    const totalSentimentWords = positiveCount + negativeCount;
-
-    // Calculate intensity factor based on intensifier count
-    const intensityFactor = 1 + (intensifierCount * 0.1); // Increase score by 10% per intensifier
-
-    // Calculate base score
-    let score = totalSentimentWords === 0
-      ? 0
-      : (positiveCount - negativeCount) / (positiveCount + negativeCount);
-
-    // Apply intensity factor (clamped between -1 and 1)
-    score = Math.max(-1, Math.min(1, score * intensityFactor));
-
-    // Determine sentiment label
-    let label: 'negative' | 'neutral' | 'positive';
-    if (score >= this.positiveThreshold) {
-      label = 'positive';
-    } else if (score <= this.negativeThreshold) {
-      label = 'negative';
+    // Normalize scores
+    const total = words.length;
+    const normalizedPositive = positiveScore / total;
+    const normalizedNegative = negativeScore / total;
+    const normalizedNeutral = 1 - (normalizedPositive + normalizedNegative);
+    
+    // Calculate compound score (-1 to 1)
+    const compound = (normalizedPositive - normalizedNegative) * 
+                     (1 - Math.pow(Math.E, -(positiveScore + negativeScore)));
+    
+    // Determine overall sentiment
+    let overall: 'positive' | 'negative' | 'neutral';
+    if (compound >= (this.options?.positiveThreshold ?? 0.05)) {
+      overall = 'positive';
+    } else if (compound <= (this.options?.negativeThreshold ?? -0.05)) {
+      overall = 'negative';
     } else {
-      label = 'neutral';
+      overall = 'neutral';
     }
 
-    // Calculate confidence based on number of sentiment words
-    const confidence = Math.min(1, totalSentimentWords / 10);
-
-    return { score, label, confidence };
+    return {
+      positive: normalizedPositive,
+      negative: normalizedNegative,
+      neutral: normalizedNeutral,
+      overall,
+      compound
+    };
   }
-
   /**
-   * Annotate content with sentiment information
-   * @param content - Original content
-   * @param sentiment - Sentiment score
-   * @returns Annotated content
+   * Add sentiment annotation to message content
+   * @param {string} content - Original message content
+   * @param {SentimentScore} sentiment - Sentiment analysis results
+   * @returns {string} Content with sentiment annotation
+   * @private
    */
-  private annotateContent(content: string, sentiment: SentimentScore): string {
-    // Format sentiment score as percentage
-    const scorePercent = Math.round(sentiment.score * 100);
-
-    // Create emoji based on sentiment
-    let emoji = '😐';
-    if (sentiment.score >= 0.5) emoji = '😄';
-    else if (sentiment.score >= 0.2) emoji = '🙂';
-    else if (sentiment.score <= -0.5) emoji = '😠';
-    else if (sentiment.score <= -0.2) emoji = '🙁';
-
-    // Create annotation text
-    const annotation = `\n\nSentiment: ${emoji} ${sentiment.label} (${scorePercent}%)`;
-
+  private addSentimentAnnotation(content: string, sentiment: SentimentScore): string {
+    const emoji = sentiment.overall === 'positive' ? '😊' : 
+                 sentiment.overall === 'negative' ? '😟' : '😐';
+                 
+    const annotation = `\n\n[Sentiment: ${sentiment.overall} ${emoji} (${sentiment.compound.toFixed(2)})]`;
+    
     return content + annotation;
   }
 
   /**
-   * Get default positive sentiment words
-   * @returns Array of positive words
+   * Get list of positive sentiment words
+   * @returns {string[]} Array of positive words
+   * @private
    */
-  private getDefaultPositiveWords(): string[] {
+  private getPositiveWords(): string[] {
     return [
       'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic',
-      'terrific', 'outstanding', 'superb', 'brilliant', 'awesome',
-      'happy', 'glad', 'pleased', 'delighted', 'satisfied', 'content',
-      'joy', 'joyful', 'love', 'loving', 'like', 'enjoy', 'enjoyed',
-      'positive', 'beautiful', 'perfect', 'best', 'better', 'impressive',
-      'thank', 'thanks', 'grateful', 'appreciate', 'appreciated',
-      'helpful', 'useful', 'valuable', 'beneficial', 'effective',
-      'success', 'successful', 'accomplish', 'accomplished', 'achievement',
-      'recommend', 'recommended', 'worth', 'worthy', 'worthwhile'
+      'happy', 'glad', 'pleased', 'delighted', 'joyful', 'excited',
+      'love', 'like', 'enjoy', 'appreciate', 'admire', 'adore',
+      'beautiful', 'brilliant', 'perfect', 'outstanding', 'superb',
+      'helpful', 'useful', 'beneficial', 'valuable', 'effective',
+      'success', 'successful', 'achievement', 'accomplish', 'win',
+      'best', 'better', 'improve', 'improved', 'improving',
+      'recommend', 'recommended', 'positive', 'optimistic',
+      'thank', 'thanks', 'thankful', 'gratitude', 'grateful',
+      'impressive', 'impressed', 'impress', 'awesome', 'cool',
+      'nice', 'pleasant', 'pleasing', 'satisfying', 'satisfied'
     ];
   }
 
   /**
-   * Get default negative sentiment words
-   * @returns Array of negative words
+   * Get list of negative sentiment words
+   * @returns {string[]} Array of negative words
+   * @private
    */
-  private getDefaultNegativeWords(): string[] {
+  private getNegativeWords(): string[] {
     return [
       'bad', 'terrible', 'horrible', 'awful', 'poor', 'disappointing',
-      'disappointed', 'dissatisfied', 'unhappy', 'sad', 'upset', 'angry',
-      'annoyed', 'frustrated', 'irritated', 'hate', 'dislike', 'despise',
-      'negative', 'ugly', 'worst', 'worse', 'fail', 'failed', 'failure',
+      'sad', 'unhappy', 'upset', 'angry', 'frustrated', 'annoyed',
+      'hate', 'dislike', 'despise', 'detest', 'loathe', 'abhor',
+      'ugly', 'disgusting', 'gross', 'nasty', 'offensive', 'repulsive',
+      'useless', 'worthless', 'ineffective', 'inefficient', 'inadequate',
+      'failure', 'fail', 'failed', 'failing', 'lose', 'lost', 'losing',
+      'worst', 'worse', 'worsen', 'worsening', 'deteriorate',
+      'avoid', 'negative', 'pessimistic', 'cynical', 'skeptical',
+      'complain', 'complaint', 'criticize', 'criticism', 'critical',
+      'disappoint', 'disappointed', 'disappointing', 'disappointment',
       'problem', 'issue', 'trouble', 'difficult', 'hard', 'complicated',
-      'confusing', 'confused', 'mistake', 'error', 'wrong', 'incorrect',
-      'useless', 'worthless', 'waste', 'wasted', 'ineffective',
-      'inadequate', 'insufficient', 'mediocre', 'subpar', 'unacceptable',
-      'complaint', 'complain', 'complained', 'sorry', 'apology', 'apologize'
+      'expensive', 'costly', 'overpriced', 'pricey', 'exorbitant',
+      'slow', 'sluggish', 'tedious', 'boring', 'dull', 'uninteresting'
     ];
   }
 
   /**
-   * Get default intensifier words
-   * @returns Array of intensifier words
+   * Get list of intensifier words
+   * @returns {string[]} Array of intensifier words
+   * @private
    */
-  private getDefaultIntensifiers(): string[] {
+  private getIntensifiers(): string[] {
     return [
       'very', 'extremely', 'incredibly', 'really', 'truly', 'absolutely',
-      'completely', 'totally', 'utterly', 'highly', 'especially',
-      'particularly', 'exceptionally', 'remarkably', 'notably',
-      'decidedly', 'exceedingly', 'immensely', 'intensely', 'strongly',
-      'deeply', 'profoundly', 'thoroughly', 'entirely', 'fully',
-      'quite', 'rather', 'somewhat', 'fairly', 'pretty', 'so', 'too'
+      'completely', 'totally', 'utterly', 'thoroughly', 'entirely',
+      'highly', 'especially', 'particularly', 'exceptionally',
+      'so', 'too', 'quite', 'rather', 'somewhat', 'fairly',
+      'almost', 'nearly', 'virtually', 'practically', 'essentially',
+      'indeed', 'certainly', 'definitely', 'undoubtedly', 'unquestionably'
+    ];
+  }
+
+  /**
+   * Get list of negation words
+   * @returns {string[]} Array of negation words
+   * @private
+   */
+  private getNegators(): string[] {
+    return [
+      'not', 'no', 'never', 'none', 'nobody', 'nothing', 'nowhere',
+      'neither', 'nor', 'hardly', 'scarcely', 'barely', 'rarely',
+      'seldom', 'don\'t', 'doesn\'t', 'didn\'t', 'won\'t', 'wouldn\'t',
+      'can\'t', 'cannot', 'couldn\'t', 'shouldn\'t', 'isn\'t', 'aren\'t',
+      'wasn\'t', 'weren\'t', 'hasn\'t', 'haven\'t', 'hadn\'t',
+      'without', 'lack', 'lacking', 'absent', 'absence', 'miss', 'missing'
     ];
   }
 }

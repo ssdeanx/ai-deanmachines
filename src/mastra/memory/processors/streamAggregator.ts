@@ -1,11 +1,14 @@
 /**
- * StreamAggregator processor for Mastra memory
- *
+ * @file StreamAggregator processor for Mastra memory
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
  * This processor aggregates and summarizes multiple messages in real-time as they flow through the memory system.
  * It can be used to reduce noise, combine related messages, and extract key information from message streams.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -17,17 +20,26 @@ const logger = createLogger({
 
 /**
  * Type for message grouping function
+ * @typedef {Function} GroupingFunction
+ * @param {CoreMessage} message - Message to determine group for
+ * @returns {string} Group key for the message
  */
 export type GroupingFunction = (message: CoreMessage) => string;
 
 /**
  * Type for message aggregation function
+ * @typedef {Function} AggregationFunction
+ * @param {CoreMessage[]} messages - Array of messages to aggregate
+ * @returns {CoreMessage} Aggregated message
  */
 export type AggregationFunction = (messages: CoreMessage[]) => CoreMessage;
 
 /**
  * StreamAggregator processor for memory messages
  * Aggregates and summarizes multiple messages in real-time
+ * 
+ * @class StreamAggregator
+ * @extends {MemoryProcessor}
  */
 export class StreamAggregator extends MemoryProcessor {
   private groupingFunctions: GroupingFunction[];
@@ -43,7 +55,16 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Create a new StreamAggregator
-   * @param options - Configuration options
+   * @param {Object} [options={}] - Configuration options
+   * @param {GroupingFunction[]} [options.groupingFunctions] - Functions to group messages
+   * @param {Record<string, AggregationFunction>} [options.aggregationFunctions] - Functions to aggregate messages by group
+   * @param {AggregationFunction} [options.defaultAggregationFunction] - Default function for aggregation
+   * @param {string[]} [options.applyToRoles=['user', 'assistant', 'tool']] - Roles to apply aggregation to
+   * @param {string[]} [options.applyToTypes=['text', 'tool-result']] - Message types to apply aggregation to
+   * @param {number} [options.minMessagesToAggregate=2] - Minimum messages to trigger aggregation
+   * @param {number} [options.maxMessagesToAggregate=10] - Maximum messages to aggregate at once
+   * @param {number} [options.timeWindowMs=60000] - Time window for aggregation in milliseconds
+   * @param {string} [options.name='StreamAggregator'] - Processor name
    */
   constructor(options: {
     groupingFunctions?: GroupingFunction[];
@@ -59,7 +80,7 @@ export class StreamAggregator extends MemoryProcessor {
     super({ name: options.name || 'StreamAggregator' });
     this.groupingFunctions = options.groupingFunctions || [
       // Default grouping by role and type
-      (message) => `${message.role}:${message.role}`
+      (message) => `${message.role}:${(message as any).type || 'text'}`
     ];
     this.aggregationFunctions = options.aggregationFunctions || {};
     this.defaultAggregationFunction = options.defaultAggregationFunction || this.defaultAggregate;
@@ -74,7 +95,8 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Add a grouping function
-   * @param fn - Grouping function to add
+   * @param {GroupingFunction} fn - Grouping function to add
+   * @returns {void}
    */
   addGroupingFunction(fn: GroupingFunction): void {
     this.groupingFunctions.push(fn);
@@ -82,8 +104,9 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Add an aggregation function for a specific group
-   * @param groupKey - Group key to add the function for
-   * @param fn - Aggregation function to add
+   * @param {string} groupKey - Group key to add the function for
+   * @param {AggregationFunction} fn - Aggregation function to add
+   * @returns {void}
    */
   addAggregationFunction(groupKey: string, fn: AggregationFunction): void {
     this.aggregationFunctions[groupKey] = fn;
@@ -91,7 +114,8 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Set the default aggregation function
-   * @param fn - Default aggregation function
+   * @param {AggregationFunction} fn - Default aggregation function
+   * @returns {void}
    */
   setDefaultAggregationFunction(fn: AggregationFunction): void {
     this.defaultAggregationFunction = fn;
@@ -99,14 +123,18 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Process messages by aggregating related ones
-   * @param messages - Array of messages to process
-   * @param _opts - Optional processor options
-   * @returns Processed array of messages
+   * @param {CoreMessage[]} messages - Array of messages to process
+   * @param {MemoryProcessorOpts} [opts={}] - Optional processor options
+   * @returns {CoreMessage[]} Processed array of messages
+   * @override
    */
-  process(messages: CoreMessage[], _opts: MemoryProcessorOpts = {}): CoreMessage[] {
+  process(messages: CoreMessage[], opts: MemoryProcessorOpts = {}): CoreMessage[] {
     if (!messages || messages.length === 0) {
       return messages;
     }
+
+    // Use opts to satisfy base signature
+    void opts;
 
     // Check if we need to process the buffer due to time window
     const currentTime = Date.now();
@@ -116,7 +144,7 @@ export class StreamAggregator extends MemoryProcessor {
     // Add new messages to the buffer
     for (const message of messages) {
       // Skip messages that don't match role or type filters
-      if (!this.applyToRoles.has(message.role) || !this.applyToTypes.has(message.type)) {
+      if (!this.applyToRoles.has(message.role) || !this.applyToTypes.has((message as any).type || 'text')) {
         continue;
       }
 
@@ -158,8 +186,9 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Process the message buffer and aggregate messages
-   * @param originalMessages - Original messages
-   * @returns Processed messages
+   * @param {CoreMessage[]} originalMessages - Original messages
+   * @returns {CoreMessage[]} Processed messages
+   * @private
    */
   private processBuffer(originalMessages: CoreMessage[]): CoreMessage[] {
     const result: CoreMessage[] = [];
@@ -196,7 +225,7 @@ export class StreamAggregator extends MemoryProcessor {
 
       // Mark the original messages as processed
       for (const message of groupMessages) {
-        processedIds.add(message.id);
+        processedIds.add((message as any).id || '');
       }
 
       // Clear the group
@@ -205,7 +234,7 @@ export class StreamAggregator extends MemoryProcessor {
 
     // Add any unprocessed messages from the original set
     for (const message of originalMessages) {
-      if (!processedIds.has(message.id)) {
+      if (!processedIds.has((message as any).id || '')) {
         result.push(message);
       }
     }
@@ -216,8 +245,9 @@ export class StreamAggregator extends MemoryProcessor {
 
   /**
    * Default aggregation function
-   * @param messages - Messages to aggregate
-   * @returns Aggregated message
+   * @param {CoreMessage[]} messages - Messages to aggregate
+   * @returns {CoreMessage} Aggregated message
+   * @private
    */
   private defaultAggregate(messages: CoreMessage[]): CoreMessage {
     if (messages.length === 0) {
@@ -227,39 +257,68 @@ export class StreamAggregator extends MemoryProcessor {
     // Use the first message as a template
     const template = messages[0];
 
-    // Combine the content of all messages
-    let combinedContent = '';
+    // Combine the string content of all messages
+    let combinedStringContent = '';
 
     for (const message of messages) {
       if (typeof message.content === 'string') {
-        if (combinedContent) {
-          combinedContent += '\n\n';
+        if (combinedStringContent) {
+          combinedStringContent += '\n\n';
         }
-        combinedContent += message.content;
+        combinedStringContent += message.content;
       }
+      // Note: Non-string content (like ToolContent from tool messages) is effectively
+      // ignored by this default string-focused aggregation logic.
+      // Users may need to provide custom aggregation functions for complex ToolContent handling.
     }
 
     // Create the aggregated message
-    return {
-      role: template.role,
-      content: combinedContent,
-      // Add any additional properties needed for CoreMessage
-      name: (template as any).name,
-      function_call: (template as any).function_call,
-      tool_calls: (template as any).tool_calls,
-      tool_call_id: (template as any).tool_call_id,
-      annotations: (template as any).annotations || []
-    };
+    if (template.role === 'tool') {
+      // If the template message (and thus the aggregated message) is a tool message,
+      // its content must be ToolContent (an array of tool parts).
+      // We'll wrap the combined string content into a single ToolResultPart.
+      let toolCallId = `aggregated-tool-call-${(template as any).id || Date.now()}`;
+      let toolName = 'aggregatedToolResult';
+
+      // Attempt to use toolCallId and toolName from the template's first tool part if available
+      if (Array.isArray(template.content) && template.content.length > 0) {
+        const firstPart = template.content[0];
+        if (firstPart && typeof firstPart.toolCallId === 'string' && typeof firstPart.toolName === 'string') {
+          toolCallId = firstPart.toolCallId; // Reusing ID implies this is a result for that call
+          toolName = firstPart.toolName;
+        }
+      }
+
+      return {
+        ...template, // This copies role: 'tool' and other properties
+        content: [ // ToolContent must be an array
+          {
+            type: 'tool-result',
+            toolCallId: toolCallId,
+            toolName: toolName,
+            result: combinedStringContent, // The aggregated string content
+          },
+        ],
+      };
+    } else {
+      // For other roles (e.g., 'user', 'assistant'), content is typically a string.
+      return {
+        ...template,
+        content: combinedStringContent,
+      };
+    }
   }
 }
 
-/**
- * Common grouping functions
- */
-export const CommonGroupings = {
-  /**
+  /** 
+   * Common grouping functions that can be used with StreamAggregator 
+   * @namespace CommonGroupings 
+   */
+export const CommonGroupings = {  /**
+export const CommonGroupings = {  /**
    * Group by role
-   * @returns Grouping function
+   * @returns {GroupingFunction} Grouping function
+   * @memberof CommonGroupings
    */
   byRole: (): GroupingFunction => {
     return (message: CoreMessage) => message.role;
@@ -267,7 +326,8 @@ export const CommonGroupings = {
 
   /**
    * Group by type
-   * @returns Grouping function
+   * @returns {GroupingFunction} Grouping function
+   * @memberof CommonGroupings
    */
   byType: (): GroupingFunction => {
     return (message: CoreMessage) => (message as any).type || 'text';
@@ -275,7 +335,8 @@ export const CommonGroupings = {
 
   /**
    * Group by role and type
-   * @returns Grouping function
+   * @returns {GroupingFunction} Grouping function
+   * @memberof CommonGroupings
    */
   byRoleAndType: (): GroupingFunction => {
     return (message: CoreMessage) => `${message.role}:${(message as any).type || 'text'}`;
@@ -283,16 +344,18 @@ export const CommonGroupings = {
 
   /**
    * Group by name
-   * @returns Grouping function
+   * @returns {GroupingFunction} Grouping function
+   * @memberof CommonGroupings
    */
   byName: (): GroupingFunction => {
-    return (message: CoreMessage) => message.name || 'unnamed';
+    return (message: CoreMessage) => (message as any).name || 'unnamed';
   },
 
   /**
    * Group by content similarity
-   * @param threshold - Similarity threshold (0-1)
-   * @returns Grouping function
+   * @param {number} [threshold=0.7] - Similarity threshold (0-1)
+   * @returns {GroupingFunction} Grouping function
+   * @memberof CommonGroupings
    */
   byContentSimilarity: (threshold: number = 0.7): GroupingFunction => {
     return (message: CoreMessage) => {

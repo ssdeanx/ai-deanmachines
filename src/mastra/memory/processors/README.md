@@ -18,9 +18,8 @@ Prevents errors by limiting the total token count of memory messages.
 ```typescript
 import { TokenLimiter } from '@mastra/memory/processors';
 
-const tokenLimiter = new TokenLimiter({
-  tokenLimit: 127000 // Maximum number of tokens allowed
-});
+// Create a TokenLimiter with a limit of ~127k tokens using default encoding
+const tokenLimiter = new TokenLimiter(127000, 'o200k_base');
 ```
 
 ### ToolCallFilter
@@ -30,9 +29,12 @@ Removes tool calls from memory messages to save tokens by excluding potentially 
 ```typescript
 import { ToolCallFilter } from '@mastra/memory/processors';
 
-const toolCallFilter = new ToolCallFilter({
-  removeAllToolCalls: false, // Whether to remove all tool calls or just tool-call type messages
-  keepToolNames: true // Whether to keep tool names in simplified messages
+// Remove all tool-call and tool-result messages by default
+const toolCallFilter = new ToolCallFilter();
+
+// Or, remove only specific tools by name:
+const imageToolFilter = new ToolCallFilter({
+  exclude: ['generateImageTool']
 });
 ```
 
@@ -295,7 +297,7 @@ import {
 } from '@mastra/memory/processors';
 
 // Create standard memory processors
-const tokenLimiter = new TokenLimiter({ tokenLimit: 1000000 });
+const tokenLimiter = new TokenLimiter(1000000, 'o200k_base');
 const toolCallFilter = new ToolCallFilter();
 const contextualSummarizer = new ContextualSummarizer({
   maxMessages: 50,

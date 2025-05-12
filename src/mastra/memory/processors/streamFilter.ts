@@ -18,13 +18,13 @@ const logger = createLogger({
 /**
  * Type for filter predicate function
  */
-export type FilterPredicate = (message: Message) => boolean;
+export type FilterPredicate = (message: CoreMessage) => boolean;
 
 /**
  * StreamFilter processor for memory messages
  * Filters messages based on custom criteria
  */
-export class StreamFilter implements MemoryProcessor {
+export class StreamFilter extends MemoryProcessor {
   private includePredicates: FilterPredicate[];
   private excludePredicates: FilterPredicate[];
   private mode: 'include' | 'exclude';
@@ -38,6 +38,7 @@ export class StreamFilter implements MemoryProcessor {
     excludePredicates?: FilterPredicate[];
     mode?: 'include' | 'exclude';
   } = {}) {
+    super({ name: 'StreamFilter' });
     this.includePredicates = options.includePredicates || [];
     this.excludePredicates = options.excludePredicates || [];
     this.mode = options.mode || 'exclude';
@@ -62,15 +63,18 @@ export class StreamFilter implements MemoryProcessor {
   /**
    * Process messages by filtering based on predicates
    * @param messages - Array of messages to process
+   * @param _opts - Options for memory processing
    * @returns Filtered array of messages
+   * @override
    */
-  process(messages: Message[]): Message[] {
+  process(messages: CoreMessage[], _opts?: MemoryProcessorOpts): CoreMessage[] {
+    void _opts;
     if (!messages || messages.length === 0) {
       return messages;
     }
 
     const initialCount = messages.length;
-    let filteredMessages: Message[];
+    let filteredMessages: CoreMessage[];
 
     if (this.mode === 'include') {
       // Include mode: only include messages that match at least one include predicate
@@ -125,7 +129,7 @@ export const CommonFilters = {
    */
   byRole: (roles: string[], include: boolean = true): FilterPredicate => {
     const roleSet = new Set(roles);
-    return (message: Message) => {
+    return (message: CoreMessage) => {
       const hasRole = roleSet.has(message.role);
       return include ? hasRole : !hasRole;
     };
@@ -139,8 +143,8 @@ export const CommonFilters = {
    */
   byType: (types: string[], include: boolean = true): FilterPredicate => {
     const typeSet = new Set(types);
-    return (message: Message) => {
-      const hasType = typeSet.has(message.type);
+    return (message: CoreMessage) => {
+      const hasType = typeSet.has((message as any).type);
       return include ? hasType : !hasType;
     };
   },
@@ -153,7 +157,7 @@ export const CommonFilters = {
    * @returns Filter predicate
    */
   byContent: (text: string, caseSensitive: boolean = false, include: boolean = true): FilterPredicate => {
-    return (message: Message) => {
+    return (message: CoreMessage) => {
       if (typeof message.content !== 'string') {
         return !include; // If not a string, exclude by default
       }

@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { BaseConfigSchema } from '../types';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
-import { Message as CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 
 /**
  * Semantic recall configuration schema

@@ -1,11 +1,14 @@
 /**
- * DuplicateDetector processor for Mastra memory
- *
+ * @file DuplicateDetector processor for Mastra memory
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
  * This processor identifies and removes duplicate or highly similar messages
  * to reduce redundancy in the context window.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -18,8 +21,11 @@ const logger = createLogger({
 /**
  * DuplicateDetector processor for memory messages
  * Identifies and removes duplicate or highly similar messages
+ * 
+ * @class DuplicateDetector
+ * @extends {MemoryProcessor}
  */
-export class DuplicateDetector implements MemoryProcessor {
+export class DuplicateDetector extends MemoryProcessor {
   private similarityThreshold: number;
   private compareContent: boolean;
   private ignoreCase: boolean;
@@ -28,7 +34,12 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Create a new DuplicateDetector
-   * @param options - Configuration options
+   * @param {Object} [options={}] - Configuration options
+   * @param {number} [options.similarityThreshold=0.9] - Threshold for considering messages similar (0-1)
+   * @param {boolean} [options.compareContent=true] - Whether to compare message content
+   * @param {boolean} [options.ignoreCase=true] - Whether to ignore case when comparing
+   * @param {boolean} [options.ignoreWhitespace=true] - Whether to ignore whitespace when comparing
+   * @param {boolean} [options.preserveNewest=true] - Whether to preserve newer messages over older ones
    */
   constructor(options: {
     similarityThreshold?: number;
@@ -37,6 +48,7 @@ export class DuplicateDetector implements MemoryProcessor {
     ignoreWhitespace?: boolean;
     preserveNewest?: boolean;
   } = {}) {
+    super({ name: 'DuplicateDetector' });
     this.similarityThreshold = options.similarityThreshold || 0.9;
     this.compareContent = options.compareContent !== false;
     this.ignoreCase = options.ignoreCase !== false;
@@ -46,33 +58,38 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Process messages by removing duplicates
-   * @param messages - Array of messages to process
-   * @returns Filtered array of messages
+   * @param {CoreMessage[]} messages - Array of messages to process
+   * @param {MemoryProcessorOpts} [opts={}] - MemoryProcessor options
+   * @returns {CoreMessage[]} Filtered array of messages
+   * @override
    */
-  process(messages: Message[]): Message[] {
+  process(messages: CoreMessage[], opts: MemoryProcessorOpts = {}): CoreMessage[] {
     if (!messages || messages.length <= 1) {
       return messages;
     }
+
+    // Use opts to satisfy base signature
+    void opts;
 
     logger.debug(`DuplicateDetector: Checking ${messages.length} messages for duplicates`);
 
     // Sort messages by timestamp (newest first if preserveNewest, otherwise oldest first)
     const sortedMessages = [...messages].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
-                   a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
-                   b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = (a as any).timestamp ? new Date((a as any).timestamp).getTime() :
+                   (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+      const bTime = (b as any).timestamp ? new Date((b as any).timestamp).getTime() :
+                   (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
       return this.preserveNewest ? bTime - aTime : aTime - bTime;
     });
 
     // Track which messages to keep
-    const uniqueMessages: Message[] = [];
+    const uniqueMessages: CoreMessage[] = [];
     const duplicateIds: Set<string> = new Set();
 
     // Process each message
     for (const message of sortedMessages) {
       // Skip if already marked as duplicate
-      if (duplicateIds.has(message.id)) {
+      if (duplicateIds.has((message as any).id || '')) {
         continue;
       }
 
@@ -81,7 +98,7 @@ export class DuplicateDetector implements MemoryProcessor {
       for (const uniqueMessage of uniqueMessages) {
         if (this.isSimilar(message, uniqueMessage)) {
           isDuplicate = true;
-          duplicateIds.add(message.id);
+          duplicateIds.add((message as any).id || '');
           break;
         }
       }
@@ -95,10 +112,10 @@ export class DuplicateDetector implements MemoryProcessor {
     // If we're preserving newest, we need to sort back to chronological order
     if (this.preserveNewest) {
       uniqueMessages.sort((a, b) => {
-        const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
-                     a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
-                     b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const aTime = (a as any).timestamp ? new Date((a as any).timestamp).getTime() :
+                     (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+        const bTime = (b as any).timestamp ? new Date((b as any).timestamp).getTime() :
+                     (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
         return aTime - bTime;
       });
     }
@@ -113,19 +130,20 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Check if two messages are similar
-   * @param a - First message
-   * @param b - Second message
-   * @returns True if messages are similar, false otherwise
+   * @param {CoreMessage} a - First message
+   * @param {CoreMessage} b - Second message
+   * @returns {boolean} True if messages are similar, false otherwise
+   * @private
    */
-  private isSimilar(a: Message, b: Message): boolean {
+  private isSimilar(a: CoreMessage, b: CoreMessage): boolean {
     // If messages have different roles or types, they're not duplicates
-    if (a.role !== b.role || a.type !== b.type) {
+    if (a.role !== b.role || (a as any).type !== (b as any).type) {
       return false;
     }
 
     // If not comparing content, only check for exact ID match
     if (!this.compareContent) {
-      return a.id === b.id;
+      return (a as any).id === (b as any).id;
     }
 
     // Get content strings
@@ -158,9 +176,10 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Calculate similarity between two strings using Levenshtein distance
-   * @param a - First string
-   * @param b - Second string
-   * @returns Similarity score between 0 and 1
+   * @param {string} a - First string
+   * @param {string} b - Second string
+   * @returns {number} Similarity score between 0 and 1
+   * @private
    */
   private calculateSimilarity(a: string, b: string): number {
     // For very long strings, use a simpler approach
@@ -178,9 +197,10 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Calculate a simpler similarity metric for long strings
-   * @param a - First string
-   * @param b - Second string
-   * @returns Similarity score between 0 and 1
+   * @param {string} a - First string
+   * @param {string} b - Second string
+   * @returns {number} Similarity score between 0 and 1
+   * @private
    */
   private calculateSimpleSimilarity(a: string, b: string): number {
     // Use character frequency comparison for long strings
@@ -212,8 +232,9 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Get character frequency map for a string
-   * @param str - Input string
-   * @returns Map of character frequencies
+   * @param {string} str - Input string
+   * @returns {Record<string, number>} Map of character frequencies
+   * @private
    */
   private getCharFrequency(str: string): Record<string, number> {
     const freq: Record<string, number> = {};
@@ -226,9 +247,10 @@ export class DuplicateDetector implements MemoryProcessor {
 
   /**
    * Calculate Levenshtein distance between two strings
-   * @param a - First string
-   * @param b - Second string
-   * @returns Levenshtein distance
+   * @param {string} a - First string
+   * @param {string} b - Second string
+   * @returns {number} Levenshtein distance
+   * @private
    */
   private levenshteinDistance(a: string, b: string): number {
     // Create matrix

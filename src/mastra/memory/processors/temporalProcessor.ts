@@ -4,10 +4,11 @@
  * This processor organizes and filters messages based on time-related criteria,
  * such as recency, time windows, and temporal relevance.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
 import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
+// Import date-fns for robust date manipulation
+import { isValid, formatDistanceToNowStrict } from 'date-fns';
 
 // Create a logger instance for the TemporalProcessor processor
 const logger = createLogger({
@@ -24,11 +25,23 @@ export interface TimeWindow {
   label?: string;
 }
 
+// Define an extended message type for internal processing
+type TemporalExtendedMessage = CoreMessage & {
+  timestamp?: Date | string | number; // Original timestamp from source if available
+  createdAt?: Date | string | number; // Original createdAt from source if available
+  thread_id?: string; // Original thread_id from source if available
+  _timestamp: Date; // Normalized, internal Date object for processing
+  _timeHeader?: boolean; // Flag if this message is a time header
+  _timeAnnotated?: boolean; // Flag if this message has been time-annotated
+  // Allow any other properties that might exist on CoreMessage or its variants
+  [key: string]: any;
+};
+
 /**
  * TemporalProcessor for memory messages
  * Organizes and filters messages based on time-related criteria
  */
-export class TemporalProcessor implements MemoryProcessor {
+export class TemporalProcessor extends MemoryProcessor { // Extend MemoryProcessor
   private mode: 'filter' | 'group' | 'annotate';
   private timeWindows: TimeWindow[];
   private recencyThreshold?: number;
@@ -48,6 +61,7 @@ export class TemporalProcessor implements MemoryProcessor {
     addTimestamps?: boolean;
     addRelativeTime?: boolean;
   } = {}) {
+    super({ name: 'TemporalProcessor' }); // Call super constructor
     this.mode = options.mode || 'annotate';
     this.timeWindows = options.timeWindows || [];
     this.recencyThreshold = options.recencyThreshold;
@@ -59,36 +73,60 @@ export class TemporalProcessor implements MemoryProcessor {
   /**
    * Process messages based on temporal criteria
    * @param messages - Array of messages to process
+   * @param _opts - Options for memory processing (currently unused)
    * @returns Processed array of messages
    */
-  process(messages: Message[]): Message[] {
+  process(messages: CoreMessage[], _opts?: MemoryProcessorOpts): CoreMessage[] {
+    void _opts; // Indicate _opts is intentionally unused
+
     if (!messages || messages.length === 0) {
       return messages;
     }
 
     logger.debug(`TemporalProcessor: Processing ${messages.length} messages in ${this.mode} mode`);
 
-    // Convert all messages to have proper timestamp objects
-    const messagesWithTimestamps = messages.map(message => {
-      const timestamp = message.timestamp
-        ? new Date(message.timestamp)
-        : message.createdAt
-          ? new Date(message.createdAt)
-          : new Date();
+    const messagesWithTimestamps = messages.map(msg => {
+      const specificMessage = msg as TemporalExtendedMessage;
+      let parsedTimestamp: Date | undefined;
 
-      return { ...message, _timestamp: timestamp };
+      if (specificMessage.timestamp) {
+        if (specificMessage.timestamp instanceof Date && isValid(specificMessage.timestamp)) {
+          parsedTimestamp = specificMessage.timestamp;
+        } else if (typeof specificMessage.timestamp === 'string' || typeof specificMessage.timestamp === 'number') {
+          const d = new Date(specificMessage.timestamp);
+          if (isValid(d)) parsedTimestamp = d;
+        }
+      }
+      if (!parsedTimestamp && specificMessage.createdAt) {
+         if (specificMessage.createdAt instanceof Date && isValid(specificMessage.createdAt)) {
+          parsedTimestamp = specificMessage.createdAt;
+        } else if (typeof specificMessage.createdAt === 'string' || typeof specificMessage.createdAt === 'number') {
+          const d = new Date(specificMessage.createdAt);
+          if (isValid(d)) parsedTimestamp = d;
+        }
+      }
+      // Fallback to current time if no valid timestamp found
+      const finalTimestamp = parsedTimestamp || new Date();
+      return { ...specificMessage, _timestamp: finalTimestamp };
     });
 
-    // Process based on mode
+    let processedMessages: TemporalExtendedMessage[];
+
     switch (this.mode) {
       case 'filter':
-        return this.filterByTime(messagesWithTimestamps);
+        processedMessages = this.filterByTime(messagesWithTimestamps);
+        break;
       case 'group':
-        return this.groupByTimeWindow(messagesWithTimestamps);
+        processedMessages = this.groupByTimeWindow(messagesWithTimestamps);
+        break;
       case 'annotate':
       default:
-        return this.annotateWithTimeInfo(messagesWithTimestamps);
+        processedMessages = this.annotateWithTimeInfo(messagesWithTimestamps);
+        break;
     }
+    
+    // Strip internal _timestamp before returning, ensure it's CoreMessage[]
+    return processedMessages.map(m => m as CoreMessage);
   }
 
   /**
@@ -96,32 +134,25 @@ export class TemporalProcessor implements MemoryProcessor {
    * @param messages - Messages with timestamp information
    * @returns Filtered messages
    */
-  private filterByTime(messages: (Message & { _timestamp: Date })[]): Message[] {
+  private filterByTime(messages: TemporalExtendedMessage[]): TemporalExtendedMessage[] {
+    let filtered = [...messages];
+    const now = new Date();
+
     // If recency threshold is set, filter by recency
-    if (this.recencyThreshold !== undefined) {
-      const now = new Date();
-      const threshold = this.getThresholdDate(now, this.recencyThreshold, this.recencyUnit);
-
-      const filteredMessages = messages.filter(message =>
-        message._timestamp >= threshold
-      );
-
-      logger.debug(`TemporalProcessor: Filtered to ${filteredMessages.length} messages within recency threshold`);
-      return filteredMessages;
+    if (this.recencyThreshold !== undefined && this.recencyThreshold > 0) {
+      const thresholdDate = this.getThresholdDate(now, this.recencyThreshold, this.recencyUnit);
+      logger.debug(`TemporalProcessor: Filtering for messages after ${thresholdDate.toISOString()}`);
+      filtered = filtered.filter(m => m._timestamp.getTime() >= thresholdDate.getTime());
     }
 
     // If time windows are set, filter by time windows
     if (this.timeWindows.length > 0) {
-      const filteredMessages = messages.filter(message =>
-        this.isInAnyTimeWindow(message._timestamp)
-      );
-
-      logger.debug(`TemporalProcessor: Filtered to ${filteredMessages.length} messages within time windows`);
-      return filteredMessages;
+      logger.debug(`TemporalProcessor: Filtering by ${this.timeWindows.length} time window(s)`);
+      filtered = filtered.filter(m => this.isInAnyTimeWindow(m._timestamp));
     }
-
-    // If no filtering criteria, return original messages
-    return messages;
+    
+    logger.debug(`TemporalProcessor: Filtered ${messages.length - filtered.length} messages`);
+    return filtered;
   }
 
   /**
@@ -129,59 +160,38 @@ export class TemporalProcessor implements MemoryProcessor {
    * @param messages - Messages with timestamp information
    * @returns Messages with time window headers
    */
-  private groupByTimeWindow(messages: (Message & { _timestamp: Date })[]): Message[] {
-    // If no time windows, group by default time periods
+  private groupByTimeWindow(messages: TemporalExtendedMessage[]): TemporalExtendedMessage[] {
     if (this.timeWindows.length === 0) {
-      // Create default time windows: today, yesterday, this week, earlier
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const thisWeek = new Date(today);
-      thisWeek.setDate(thisWeek.getDate() - 7);
-
-      this.timeWindows = [
-        { start: today, label: 'Today' },
-        { start: yesterday, end: today, label: 'Yesterday' },
-        { start: thisWeek, end: yesterday, label: 'This Week' },
-        { start: new Date(0), end: thisWeek, label: 'Earlier' }
-      ];
+      logger.debug("TemporalProcessor: No time windows defined for grouping. Returning messages as is.");
+      return messages;
     }
 
-    // Sort messages by timestamp
     const sortedMessages = [...messages].sort((a, b) =>
       a._timestamp.getTime() - b._timestamp.getTime()
     );
 
-    // Group messages by time window
-    const result: Message[] = [];
-    let currentWindowLabel: string | null = null;
+    const result: TemporalExtendedMessage[] = [];
+    let lastHeaderLabel: string | null = null;
 
     for (const message of sortedMessages) {
-      // Find which time window this message belongs to
       const window = this.findTimeWindow(message._timestamp);
+      const currentLabel = window?.label || 'Other'; // Default label if not in a defined window
 
-      // If window changed, add a header
-      if (window && window.label && window.label !== currentWindowLabel) {
-        currentWindowLabel = window.label;
-
-        // Add a header message
+      if (currentLabel !== lastHeaderLabel) {
         result.push({
-          id: `timeheader-${currentWindowLabel}-${Date.now()}`,
-          thread_id: message.thread_id,
-          content: `[Time Period: ${currentWindowLabel}]`,
-          role: 'system' as MessageRole,
-          type: 'text' as MessageType,
-          createdAt: new Date(),
-          _timeHeader: true
-        } as Message);
+          id: `timeheader-${currentLabel.replace(/\s+/g, '-')}-${Date.now()}`, // Ensure ID is unique
+          role: 'system',
+          content: `[Time Period: ${currentLabel}]`,
+          _timestamp: message._timestamp, // Header takes timestamp of first message in group
+          _timeHeader: true,
+          // Ensure all required CoreMessage fields are present or any other fields your system expects
+          // For example, if 'ui' or 'tool_call' etc. are possible, handle them or ensure they are not expected for headers
+        } as TemporalExtendedMessage);
+        lastHeaderLabel = currentLabel;
       }
-
-      // Add the message
       result.push(message);
     }
-
-    logger.debug(`TemporalProcessor: Grouped messages into ${this.timeWindows.length} time windows`);
+    logger.debug(`TemporalProcessor: Grouped messages, added ${result.length - messages.length} headers.`);
     return result;
   }
 
@@ -190,35 +200,25 @@ export class TemporalProcessor implements MemoryProcessor {
    * @param messages - Messages with timestamp information
    * @returns Messages with time annotations
    */
-  private annotateWithTimeInfo(messages: (Message & { _timestamp: Date })[]): Message[] {
-    const now = new Date();
-
+  private annotateWithTimeInfo(messages: TemporalExtendedMessage[]): TemporalExtendedMessage[] {
     return messages.map(message => {
-      let content = message.content;
+      const annotatedMessage = { ...message, _timeAnnotated: true } as TemporalExtendedMessage;
+      let timeAnnotation = '';
 
-      // Skip non-string content
-      if (typeof content !== 'string') {
-        return message;
-      }
-
-      // Add timestamp if configured
       if (this.addTimestamps) {
-        const timestamp = message._timestamp.toISOString();
-        content = `[${timestamp}] ${content}`;
+        timeAnnotation += `[${annotatedMessage._timestamp.toISOString()}] `;
       }
-
-      // Add relative time if configured
       if (this.addRelativeTime) {
-        const relativeTime = this.getRelativeTimeString(message._timestamp, now);
-        content = `[${relativeTime}] ${content}`;
+        timeAnnotation += `(${this.getRelativeTimeString(annotatedMessage._timestamp)}) `;
       }
 
-      // Return message with modified content
-      if (content !== message.content) {
-        return { ...message, content, _timeAnnotated: true };
+      if (timeAnnotation.length > 0 && typeof annotatedMessage.content === 'string') {
+        annotatedMessage.content = `${timeAnnotation.trim()} ${annotatedMessage.content}`;
+      } else if (timeAnnotation.length > 0) {
+         // If content is not a string, add annotation to metadata
+        annotatedMessage.metadata = { ...(annotatedMessage.metadata || {}), timeAnnotation: timeAnnotation.trim() };
       }
-
-      return message;
+      return annotatedMessage;
     });
   }
 
@@ -237,12 +237,7 @@ export class TemporalProcessor implements MemoryProcessor {
    * @returns Time window object or null if not in any window
    */
   private findTimeWindow(date: Date): TimeWindow | null {
-    for (const window of this.timeWindows) {
-      if (this.isInTimeWindow(date, window)) {
-        return window;
-      }
-    }
-    return null;
+    return this.timeWindows.find(window => this.isInTimeWindow(date, window)) || null;
   }
 
   /**
@@ -252,10 +247,10 @@ export class TemporalProcessor implements MemoryProcessor {
    * @returns True if date is in time window, false otherwise
    */
   private isInTimeWindow(date: Date, window: TimeWindow): boolean {
-    const start = new Date(window.start);
-    const end = window.end ? new Date(window.end) : new Date();
-
-    return date >= start && date < end;
+    const startTime = new Date(window.start).getTime();
+    const endTime = window.end ? new Date(window.end).getTime() : Infinity;
+    const targetTime = date.getTime();
+    return targetTime >= startTime && targetTime <= endTime;
   }
 
   /**
@@ -266,46 +261,19 @@ export class TemporalProcessor implements MemoryProcessor {
    * @returns Threshold date
    */
   private getThresholdDate(now: Date, threshold: number, unit: 'minutes' | 'hours' | 'days'): Date {
-    const result = new Date(now);
-
-    switch (unit) {
-      case 'minutes':
-        result.setMinutes(result.getMinutes() - threshold);
-        break;
-      case 'hours':
-        result.setHours(result.getHours() - threshold);
-        break;
-      case 'days':
-        result.setDate(result.getDate() - threshold);
-        break;
-    }
-
-    return result;
+    const d = new Date(now);
+    if (unit === 'minutes') d.setMinutes(d.getMinutes() - threshold);
+    else if (unit === 'hours') d.setHours(d.getHours() - threshold);
+    else if (unit === 'days') d.setDate(d.getDate() - threshold);
+    return d;
   }
 
   /**
    * Get a human-readable relative time string
    * @param date - Date to get relative time for
-   * @param now - Current date
    * @returns Relative time string
    */
-  private getRelativeTimeString(date: Date, now: Date): string {
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-
-    if (diffDay > 30) {
-      return `${Math.floor(diffDay / 30)} months ago`;
-    } else if (diffDay > 0) {
-      return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
-    } else if (diffHour > 0) {
-      return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
-    } else if (diffMin > 0) {
-      return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
-    } else {
-      return 'just now';
-    }
+  private getRelativeTimeString(date: Date): string {
+    return formatDistanceToNowStrict(date, { addSuffix: true });
   }
 }

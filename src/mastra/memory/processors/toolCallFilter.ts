@@ -1,11 +1,14 @@
 /**
- * ToolCallFilter processor for Mastra memory
- *
+ * @file ToolCallFilter processor for Mastra memory
+ * @version 1.0.0
+ * @author Deanmachines
+ * @copyright 2025
+ * @license MIT
+ * 
  * This processor removes tool calls from memory messages to save tokens
  * by excluding potentially verbose tool interactions.
  */
-// never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
@@ -18,28 +21,29 @@ const logger = createLogger({
 /**
  * ToolCallFilter processor for memory messages
  * Removes tool calls from memory messages to save tokens
+ * 
+ * @class ToolCallFilter
+ * @extends {MemoryProcessor}
  */
 export class ToolCallFilter extends MemoryProcessor {
-  private removeAllToolCalls: boolean;
-  private keepToolNames: boolean;
+  private excludeSet: Set<string>;
 
   /**
    * Create a new ToolCallFilter
-   * @param options.removeAllToolCalls - Whether to remove all tool calls
-   * @param options.keepToolNames - Whether to keep tool names in simplified messages
+   * @param {Object} [options={}] - Configuration options
+   * @param {string[]} [options.exclude] - Array of tool names to remove; all other tool calls/results are preserved
    */
-  constructor(options: { removeAllToolCalls?: boolean; keepToolNames?: boolean } = {}) {
+  constructor(options: { exclude?: string[] } = {}) {
     super({ name: 'ToolCallFilter' });
-    // Initialize options
-    this.removeAllToolCalls = options.removeAllToolCalls ?? false;
-    this.keepToolNames = options.keepToolNames ?? true;
+    this.excludeSet = new Set(options.exclude || []);
   }
 
   /**
    * Process messages to remove tool calls
-   * @param messages - Array of messages to process
-   * @param _opts - Options for memory processing
-   * @returns Filtered array of messages
+   * @param {CoreMessage[]} messages - Array of messages to process
+   * @param {MemoryProcessorOpts} [_opts={}] - Options for memory processing
+   * @returns {CoreMessage[]} Filtered array of messages
+   * @override
    */
   process(messages: CoreMessage[], _opts: MemoryProcessorOpts = {}): CoreMessage[] {
     // Use _opts to satisfy base signature
@@ -50,49 +54,24 @@ export class ToolCallFilter extends MemoryProcessor {
     }
 
     let removedCount = 0;
-    const processedMessages: Array<CoreMessage | null> = messages.map(message => {
-      // Skip non-tool messages or if not removing all tool calls
+    const filtered = messages.filter(message => {
       const t = (message as any).type;
-      if (t !== 'tool-call' && (!this.removeAllToolCalls || t !== 'tool-result')) {
-        return message;
-      }
-
-      // Handle explicit tool-call messages
-      if ((message as any).type === 'tool-call') {
-        if (this.keepToolNames) {
-          // Simplify tool-call to a text message preserving tool name
-          return {
-            role: message.role,
-            content: `[Tool call: ${(message as any).name || 'unknown tool'}]`,
-            type: 'text'
-          } as CoreMessage;
+      if (t === 'tool-call' || t === 'tool-result') {
+        const name = (message as any).name;
+        // Remove only calls/results for tools in excludeSet
+        if (this.excludeSet.size === 0 || this.excludeSet.has(name)) {
+          removedCount++;
+          return false;
         }
-        // Otherwise, remove message completely
-        return null;
+        return true;
       }
-
-      // Remove any code blocks from non-tool messages
-      if (typeof message.content === 'string' && message.content.includes('```')) {
-        const toolCallRegex = /```[\s\S]*?```/g;
-        const updatedContent = message.content.replace(toolCallRegex, '');
-        if (updatedContent !== message.content) {
-          return {
-            role: message.role,
-            content: updatedContent
-          } as CoreMessage;
-        }
-      }
-
-      return message;
+      return true;
     });
-
-    // Filter out removed messages
-    const filteredMessages = processedMessages.filter((m): m is CoreMessage => m !== null);
 
     if (removedCount > 0) {
       logger.debug(`ToolCallFilter: Removed ${removedCount} tool call messages`);
     }
 
-    return filteredMessages;
+    return filtered;
   }
 }
