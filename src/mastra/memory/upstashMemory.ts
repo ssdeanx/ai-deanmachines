@@ -12,7 +12,7 @@ import {
   MemoryProcessor,
   Message
 } from './types';
-import { logger } from '../index';
+import { logger } from '../observability/logger';
 import { DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_MEMORY, DEFAULT_VECTOR_SEARCH } from '../constants';
 
 // Import for embeddings

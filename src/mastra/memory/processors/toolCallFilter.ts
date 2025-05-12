@@ -6,7 +6,7 @@
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * ToolCallFilter processor for memory messages

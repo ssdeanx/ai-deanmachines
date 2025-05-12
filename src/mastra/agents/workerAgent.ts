@@ -9,9 +9,15 @@ import { Agent } from '@mastra/core';
 import { google } from '@ai-sdk/google';
 
 // Import types and constants
-import { WorkerAgentConfig, WorkerAgentConfigSchema } from './types';
+import {
+  WorkerAgentConfig,
+  WorkerAgentConfigSchema,
+  TaskProcessingOptions,
+  TaskProcessingOptionsSchema,
+  ConfidenceEvaluationSchema
+} from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
-import { logger } from '../index';
+import { logger } from '../observability/logger';
 import { BaseAgent } from './baseAgent';
 
 /**
@@ -123,26 +129,111 @@ export class WorkerAgent extends BaseAgent {
    * @param task - Task to process
    * @returns Response from the worker agent
    */
-  async processTask(task: string) {
+  async processTask(task: string, options: TaskProcessingOptions = {}) {
+    // Validate options with Zod
+    const validatedOptions = TaskProcessingOptionsSchema.parse(options);
     logger.info(`Processing task in domain ${this.domain}: ${task.substring(0, 50)}${task.length > 50 ? '...' : ''}`);
 
     try {
       // Enhance the task with domain context
       const enhancedTask = `
-        Task: ${task}
+Task: ${task}
 
-        Please approach this task from your expertise in ${this.domain}.
-        ${this.expertise.length > 0 ? `Draw upon your knowledge in: ${this.expertise.join(', ')}.` : ''}
+You are an expert in the domain of ${this.domain}.
+${this.expertise.length > 0 ? `Your specific areas of expertise include: ${this.expertise.join(', ')}.` : ''}
 
-        Provide a detailed and accurate response based on your specialized knowledge.
+Instructions:
+1. Analyze the task thoroughly from the perspective of your domain expertise
+2. Apply specialized knowledge and best practices from your domain
+3. Consider any domain-specific constraints, standards, or methodologies
+4. Provide a comprehensive solution with clear reasoning
+5. Include relevant technical details, references, or examples where appropriate
+6. Ensure your response is accurate, practical, and implementable
+
+Provide a detailed and authoritative response based on your specialized knowledge.
       `;
 
-      const response = await this.generate(enhancedTask);
+      // Set domain-specific options using validated options
+      const taskOptions: Record<string, any> = {
+        temperature: validatedOptions.temperature || 0.3, // Lower temperature for more factual responses
+        maxTokens: validatedOptions.maxTokens || 1500, // Allow for detailed responses
+        topP: validatedOptions.topP || 0.95, // Focus on more likely tokens
+        // Include domain context in metadata for telemetry
+        metadata: {
+          ...(validatedOptions.metadata || {}),
+          domain: this.domain,
+          expertise: this.expertise,
+          taskType: 'domain_specific'
+        }
+      };
+
+      // Add thread and resource IDs if provided
+      if (validatedOptions.threadId) {
+        taskOptions['threadId'] = validatedOptions.threadId;
+      }
+
+      if (validatedOptions.resourceId) {
+        taskOptions['resourceId'] = validatedOptions.resourceId;
+      }
+
+      // Generate response with enhanced context and options
+      const response = await this.generate(enhancedTask, taskOptions);
+
+      // Store the task and response in memory if available
+      if (this.memory && this.threadId) {
+        try {
+          // Create user message
+          const userMessage = {
+            content: task,
+            role: 'user' as const,
+            type: 'text' as const,
+            metadata: {
+              domain: this.domain,
+              expertise: this.expertise,
+              timestamp: new Date().toISOString()
+            }
+          };
+
+          // Store user message
+          await (this.memory as any).addMessage(this.threadId, userMessage);
+
+          // Create assistant message
+          const assistantMessage = {
+            content: response.text,
+            role: 'assistant' as const,
+            type: 'text' as const,
+            metadata: {
+              domain: this.domain,
+              expertise: this.expertise,
+              timestamp: new Date().toISOString()
+            }
+          };
+
+          // Store assistant message
+          await (this.memory as any).addMessage(this.threadId, assistantMessage);
+        } catch (memoryError) {
+          logger.warn(`Failed to store task in memory: ${memoryError}`);
+        }
+      }
+
       logger.debug(`Task processed successfully in domain: ${this.domain}`);
       return response;
     } catch (error) {
       logger.error(`Error processing task in domain ${this.domain}: ${error}`);
-      throw error;
+
+      // Attempt to recover with a simplified approach
+      try {
+        logger.info('Attempting recovery with simplified task processing');
+        const response = await this.generate(task, {
+          temperature: 0.2,
+          maxTokens: 800
+        });
+        logger.debug('Recovery successful with simplified approach');
+        return response;
+      } catch (recoveryError) {
+        logger.error(`Recovery failed: ${recoveryError}`);
+        throw error; // Throw the original error
+      }
     }
   }
 
@@ -176,9 +267,18 @@ export class WorkerAgent extends BaseAgent {
 
         if (jsonMatch) {
           const jsonStr = jsonMatch[1] || jsonMatch[0];
-          const evaluation = JSON.parse(jsonStr);
-          logger.debug(`Confidence evaluation: ${evaluation.confidence} - ${evaluation.reasoning}`);
-          return evaluation.confidence;
+          const parsedJson = JSON.parse(jsonStr);
+
+          // Validate the evaluation with Zod
+          try {
+            const evaluation = ConfidenceEvaluationSchema.parse(parsedJson);
+            logger.debug(`Confidence evaluation: ${evaluation.confidence} - ${evaluation.reasoning}`);
+            return evaluation.confidence;
+          } catch (validationError) {
+            logger.warn(`Invalid confidence evaluation format: ${validationError}`);
+            // Default to moderate confidence if validation fails
+            return 0.5;
+          }
         } else {
           logger.warn('Failed to extract JSON confidence evaluation from response');
           // Default to moderate confidence if parsing fails

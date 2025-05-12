@@ -5,9 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.0.2] - 2025-05-11 20:35:21 UTC
+## [v0.0.2] - 2025-05-11 22:19:31 UTC
 
 ### Added
+
+- Enhanced agent implementations with proper Zod validation and Agent class usage:
+  - Updated BaseAgent to properly use streamText and generateText from the 'ai' package
+  - Fixed the streamText function call to properly handle the Promise
+  - Updated the prepareMemoryContext method to use validated options
+  - Added proper Zod validation for memory context options
+  - Updated the storeMessageInMemory method to use MessageRoleSchema and MessageTypeSchema
+  - Fixed all import statements to only include what's actually used
+  - Added proper error handling and fallback mechanisms
+
+  - Updated GoogleAgent to use Zod for all types and options
+  - Added ImageProcessingOptionsSchema and VideoProcessingOptionsSchema
+  - Added MultimodalMessageSchema for validating memory operations
+  - Updated processImage and processVideo methods to use Zod validation
+  - Fixed the generateStructured method to properly use Zod schemas
+  - Implemented proper Agent class usage from '@mastra/core'
+  - Added specialized Agent instances for image, video, and structured response processing
+
+  - Updated SupervisorAgent to use Zod for all types and options
+  - Added SubtaskSchema, SubtaskResultSchema, and ComplexTaskOptionsSchema
+  - Updated memory operations to use proper type assertions
+  - Implemented proper Agent class usage from '@mastra/core'
+  - Added specialized Agent instances for planning, synthesis, and direct processing
+
+  - Updated WorkerAgent to use Zod for all types and options
+  - Added TaskProcessingOptionsSchema and ConfidenceEvaluationSchema
+  - Updated processTask method to use Zod validation
+  - Updated evaluateConfidence method to use ConfidenceEvaluationSchema
+  - Fixed all import statements to only include what's actually used
 
 - Enhanced observability system:
   - Switched from langfuse-vercel to langfuse package for better integration

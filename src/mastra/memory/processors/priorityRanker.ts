@@ -1,12 +1,12 @@
 /**
  * PriorityRanker processor for Mastra memory
- * 
+ *
  * This processor ranks messages by importance and keeps only the most important ones
  * when context window size is limited.
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * PriorityRanker processor for memory messages
@@ -45,7 +45,7 @@ export class PriorityRanker implements MemoryProcessor {
     this.maxMessages = options.maxMessages || 50;
     this.preserveSystemMessages = options.preserveSystemMessages !== false;
     this.preserveRecentMessages = options.preserveRecentMessages || 5;
-    
+
     // Default importance factors
     this.importanceFactors = {
       recency: options.importanceFactors?.recency || 0.5,
@@ -80,15 +80,15 @@ export class PriorityRanker implements MemoryProcessor {
 
     // Sort messages by timestamp (oldest first)
     const sortedMessages = [...messages].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 
+      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
                    a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 
+      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
                    b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return aTime - bTime;
     });
 
     // Always preserve system messages if configured
-    const systemMessages = this.preserveSystemMessages 
+    const systemMessages = this.preserveSystemMessages
       ? sortedMessages.filter(m => m.role === 'system')
       : [];
 
@@ -97,8 +97,8 @@ export class PriorityRanker implements MemoryProcessor {
     const recentIds = new Set(recentMessages.map(m => m.id));
 
     // Calculate importance scores for remaining messages
-    const messagesToRank = sortedMessages.filter(m => 
-      (!this.preserveSystemMessages || m.role !== 'system') && 
+    const messagesToRank = sortedMessages.filter(m =>
+      (!this.preserveSystemMessages || m.role !== 'system') &&
       !recentIds.has(m.id)
     );
 
@@ -121,9 +121,9 @@ export class PriorityRanker implements MemoryProcessor {
       ...topMessages,
       ...recentMessages
     ].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 
+      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
                    a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 
+      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
                    b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return aTime - bTime;
     });
@@ -162,17 +162,17 @@ export class PriorityRanker implements MemoryProcessor {
     // Factor 5: Keyword presence
     if (this.importanceFactors.keywords.length > 0) {
       const lowerContent = content.toLowerCase();
-      const keywordMatches = this.importanceFactors.keywords.filter(keyword => 
+      const keywordMatches = this.importanceFactors.keywords.filter(keyword =>
         lowerContent.includes(keyword.toLowerCase())
       ).length;
-      
-      const keywordScore = (keywordMatches / this.importanceFactors.keywords.length) * 
+
+      const keywordScore = (keywordMatches / this.importanceFactors.keywords.length) *
                           this.importanceFactors.keywordWeight;
       score += keywordScore;
     }
 
     // Normalize score to be between 0 and 1
-    return score / (1 + this.importanceFactors.recency + this.importanceFactors.length + 
+    return score / (1 + this.importanceFactors.recency + this.importanceFactors.length +
                    this.importanceFactors.keywordWeight);
   }
 }

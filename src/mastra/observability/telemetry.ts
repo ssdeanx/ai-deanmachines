@@ -13,6 +13,20 @@ import { logger } from './logger';
 import { TelemetryConfig, TelemetrySDK } from './types';
 import { DEFAULT_TELEMETRY_CONFIG, SEMRESATTRS } from './constants';
 
+// Export telemetry configuration for instrumentation
+export const telemetry = {
+  enabled: true,
+  serviceName: 'mastra-service',
+  sampling: {
+    type: 'always_on'
+  },
+  export: {
+    type: 'otlp',
+    protocol: 'http',
+    endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces'
+  }
+};
+
 /**
  * Configure and initialize OpenTelemetry
  *

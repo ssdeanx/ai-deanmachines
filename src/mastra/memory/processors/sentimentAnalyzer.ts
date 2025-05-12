@@ -1,12 +1,12 @@
 /**
  * SentimentAnalyzer processor for Mastra memory
- * 
+ *
  * This processor analyzes the sentiment of messages and adds sentiment
  * information as metadata or annotations.
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * Sentiment score type
@@ -63,7 +63,7 @@ export class SentimentAnalyzer implements MemoryProcessor {
     this.analyzeToolMessages = options.analyzeToolMessages || false;
     this.positiveThreshold = options.positiveThreshold || 0.05;
     this.negativeThreshold = options.negativeThreshold || -0.05;
-    
+
     // Initialize sentiment word lists
     this.sentimentWords = {
       positive: options.sentimentWords?.positive || this.getDefaultPositiveWords(),
@@ -102,20 +102,20 @@ export class SentimentAnalyzer implements MemoryProcessor {
 
       // Analyze sentiment
       const sentiment = this.analyzeSentiment(message.content);
-      
+
       // Create a copy of the message to modify
       const processedMessage = { ...message };
-      
+
       // Add sentiment to message metadata
       if (this.extractToMetadata) {
         processedMessage._sentiment = sentiment;
       }
-      
+
       // Add sentiment annotations to content if configured
       if (this.addSentimentAnnotations) {
         processedMessage.content = this.annotateContent(message.content, sentiment);
       }
-      
+
       return processedMessage;
     });
   }
@@ -129,41 +129,41 @@ export class SentimentAnalyzer implements MemoryProcessor {
     // Normalize text: lowercase and remove punctuation
     const normalizedText = content.toLowerCase().replace(/[^\w\s]/g, '');
     const words = normalizedText.split(/\s+/);
-    
+
     // Count sentiment words
     let positiveCount = 0;
     let negativeCount = 0;
     let intensifierCount = 0;
-    
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      
+
       // Check for intensifiers
       const isIntensified = i > 0 && this.sentimentWords.intensifiers.includes(words[i - 1]);
       const intensifierMultiplier = isIntensified ? 2 : 1;
-      
+
       // Count intensifiers
       if (this.sentimentWords.intensifiers.includes(word)) {
         intensifierCount++;
       }
-      
+
       // Count positive words
       if (this.sentimentWords.positive.includes(word)) {
         positiveCount += intensifierMultiplier;
       }
-      
+
       // Count negative words
       if (this.sentimentWords.negative.includes(word)) {
         negativeCount += intensifierMultiplier;
       }
     }
-    
+
     // Calculate sentiment score
     const totalSentimentWords = positiveCount + negativeCount;
-    const score = totalSentimentWords === 0 
-      ? 0 
+    const score = totalSentimentWords === 0
+      ? 0
       : (positiveCount - negativeCount) / (positiveCount + negativeCount);
-    
+
     // Determine sentiment label
     let label: 'negative' | 'neutral' | 'positive';
     if (score >= this.positiveThreshold) {
@@ -173,10 +173,10 @@ export class SentimentAnalyzer implements MemoryProcessor {
     } else {
       label = 'neutral';
     }
-    
+
     // Calculate confidence based on number of sentiment words
     const confidence = Math.min(1, totalSentimentWords / 10);
-    
+
     return { score, label, confidence };
   }
 
@@ -189,17 +189,17 @@ export class SentimentAnalyzer implements MemoryProcessor {
   private annotateContent(content: string, sentiment: SentimentScore): string {
     // Format sentiment score as percentage
     const scorePercent = Math.round(sentiment.score * 100);
-    
+
     // Create emoji based on sentiment
     let emoji = '😐';
     if (sentiment.score >= 0.5) emoji = '😄';
     else if (sentiment.score >= 0.2) emoji = '🙂';
     else if (sentiment.score <= -0.5) emoji = '😠';
     else if (sentiment.score <= -0.2) emoji = '🙁';
-    
+
     // Create annotation text
     const annotation = `\n\nSentiment: ${emoji} ${sentiment.label} (${scorePercent}%)`;
-    
+
     return content + annotation;
   }
 

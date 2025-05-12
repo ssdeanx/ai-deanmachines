@@ -11,7 +11,7 @@ import {
   Message,
   MemoryProcessor
 } from './types';
-import { logger } from '../index';
+import { logger } from '../observability/logger';
 import { ENV, DEFAULT_MEMORY } from '../constants';
 
 /**

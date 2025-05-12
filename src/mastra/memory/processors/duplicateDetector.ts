@@ -1,12 +1,12 @@
 /**
  * DuplicateDetector processor for Mastra memory
- * 
+ *
  * This processor identifies and removes duplicate or highly similar messages
  * to reduce redundancy in the context window.
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * DuplicateDetector processor for memory messages
@@ -51,9 +51,9 @@ export class DuplicateDetector implements MemoryProcessor {
 
     // Sort messages by timestamp (newest first if preserveNewest, otherwise oldest first)
     const sortedMessages = [...messages].sort((a, b) => {
-      const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 
+      const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
                    a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 
+      const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
                    b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return this.preserveNewest ? bTime - aTime : aTime - bTime;
     });
@@ -88,9 +88,9 @@ export class DuplicateDetector implements MemoryProcessor {
     // If we're preserving newest, we need to sort back to chronological order
     if (this.preserveNewest) {
       uniqueMessages.sort((a, b) => {
-        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 
+        const aTime = a.timestamp ? new Date(a.timestamp).getTime() :
                      a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 
+        const bTime = b.timestamp ? new Date(b.timestamp).getTime() :
                      b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return aTime - bTime;
       });
@@ -164,7 +164,7 @@ export class DuplicateDetector implements MemoryProcessor {
     // Calculate Levenshtein distance
     const distance = this.levenshteinDistance(a, b);
     const maxLength = Math.max(a.length, b.length);
-    
+
     // Convert distance to similarity (1 - normalized distance)
     return maxLength === 0 ? 1 : 1 - distance / maxLength;
   }
@@ -179,26 +179,26 @@ export class DuplicateDetector implements MemoryProcessor {
     // Use character frequency comparison for long strings
     const freqA = this.getCharFrequency(a);
     const freqB = this.getCharFrequency(b);
-    
+
     // Calculate cosine similarity of character frequencies
     let dotProduct = 0;
     let magnitudeA = 0;
     let magnitudeB = 0;
-    
+
     for (const char in freqA) {
       magnitudeA += freqA[char] * freqA[char];
     }
-    
+
     for (const char in freqB) {
       magnitudeB += freqB[char] * freqB[char];
     }
-    
+
     for (const char in freqA) {
       if (freqB[char]) {
         dotProduct += freqA[char] * freqB[char];
       }
     }
-    
+
     const magnitude = Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB);
     return magnitude === 0 ? 0 : dotProduct / magnitude;
   }
@@ -226,16 +226,16 @@ export class DuplicateDetector implements MemoryProcessor {
   private levenshteinDistance(a: string, b: string): number {
     // Create matrix
     const matrix: number[][] = [];
-    
+
     // Initialize matrix
     for (let i = 0; i <= b.length; i++) {
       matrix[i] = [i];
     }
-    
+
     for (let j = 0; j <= a.length; j++) {
       matrix[0][j] = j;
     }
-    
+
     // Fill matrix
     for (let i = 1; i <= b.length; i++) {
       for (let j = 1; j <= a.length; j++) {
@@ -247,7 +247,7 @@ export class DuplicateDetector implements MemoryProcessor {
         );
       }
     }
-    
+
     return matrix[b.length][a.length];
   }
 }

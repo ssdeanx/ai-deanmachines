@@ -2,13 +2,22 @@ import { Agent } from '@mastra/core';
 import { google } from '@ai-sdk/google';
 
 // Import types and constants
-import { AgentConfig, AgentConfigSchema } from './types';
+import {
+  AgentConfig,
+  AgentConfigSchema,
+  GenerateOptionsSchema,
+  StreamOptionsSchema,
+  MemoryContextOptionsSchema,
+  MessageRoleSchema,
+  MessageTypeSchema
+} from './types';
 import { AgentType, DEFAULT_INSTRUCTIONS, DEFAULT_MODEL_NAMES } from './constants';
 import { logger } from '../observability/logger';
 import { Memory } from '../memory';
 import { getTracer, recordLLMMetrics } from '../observability/telemetry';
 import { simpleTokenCounter, calculateCost } from '../evals/utils';
-
+import { streamText, generateText } from 'ai';
+import { z } from 'zod';
 /**
  * BaseAgent class that serves as the foundation for all agent types
  * Provides core functionality for interacting with LLMs and managing memory
@@ -131,15 +140,30 @@ export class BaseAgent {
     await this.prepareMemoryContext(input, options);
 
     try {
-      const response = await this.agent.stream(input, options);
-      logger.debug('Stream response started successfully');
+      // Validate options with Zod
+      const validatedOptions = StreamOptionsSchema.parse(options);
 
-      // Store the response in memory if available
+      // Store the user message in memory if available
       if (this.memory && this.threadId) {
-        // We can't easily store streaming responses in memory as they're being generated
-        // But we can store the input message
         await this.storeMessageInMemory(input, 'user', 'text');
       }
+
+      // Use streamText from the 'ai' package
+      const streamResponse = streamText({
+        model: google(this.modelName),
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        topP: this.topP,
+        topK: this.topK,
+        prompt: input,
+        ...validatedOptions
+      });
+
+      // Extract the textStream and text from the result
+      const textStream = streamResponse.textStream;
+      const text = streamResponse.text;
+
+      logger.debug('Stream response started successfully');
 
       // For streaming, we can't know the completion tokens or total cost yet
       // So we just record what we know
@@ -153,23 +177,11 @@ export class BaseAgent {
       const agent = this;
       let fullText = '';
 
-      // We'll use a simpler approach - record metrics after the stream completes
-      // This is a simplified approach that works with the Vercel AI SDK
-      setTimeout(async () => {
+      // Create a promise that resolves when the stream is complete
+      const streamComplete = (async () => {
         try {
-          // Wait a bit to ensure the stream has completed
-          // In a real implementation, you would use a more robust approach
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Get the final text from the response
-          try {
-            // The text property might be a Promise or a string
-            const responseText = await Promise.resolve(response.text);
-            if (typeof responseText === 'string') {
-              fullText = responseText;
-            }
-          } catch (error) {
-            logger.warn(`Error getting response text: ${error}`);
+          for await (const chunk of textStream) {
+            fullText += chunk;
           }
 
           // Calculate completion tokens and latency
@@ -205,13 +217,18 @@ export class BaseAgent {
             await agent.storeMessageInMemory(fullText, 'assistant', 'text');
           }
         } catch (error) {
-          logger.error(`Error recording stream metrics: ${error}`);
+          logger.error(`Error processing stream: ${error}`);
         } finally {
           span.end();
         }
-      }, 2000); // Wait 2 seconds to ensure the stream has completed
+      })();
 
-      return response;
+      // Return a response object that matches the expected interface
+      return {
+        text: Promise.resolve(text),
+        textStream,
+        streamComplete
+      };
     } catch (error) {
       logger.error(`Error streaming response: ${error}`);
 
@@ -244,12 +261,22 @@ export class BaseAgent {
     logger.info(`Generating response for input: ${input.substring(0, 50)}${input.length > 50 ? '...' : ''}`);
     logger.debug(`Generate options: ${JSON.stringify(options)}`);
 
+    // Set thread and resource IDs from options if provided
+    if (options.threadId) {
+      this.threadId = options.threadId;
+    }
+    if (options.resourceId) {
+      this.resourceId = options.resourceId;
+    }
+
     // Create a tracer for this operation
     const tracer = getTracer('mastra.agent');
     const span = tracer.startSpan('generate');
     span.setAttribute('agent.type', this.type);
     span.setAttribute('agent.model', this.modelName);
     span.setAttribute('input.length', input.length);
+    if (this.threadId) span.setAttribute('thread.id', this.threadId);
+    if (this.resourceId) span.setAttribute('resource.id', this.resourceId);
 
     // Start timing the operation
     const startTime = Date.now();
@@ -262,14 +289,70 @@ export class BaseAgent {
     await this.prepareMemoryContext(input, options);
 
     try {
+      // Validate options with Zod
+      const validatedOptions = GenerateOptionsSchema.parse(options);
+
       // Store the user message in memory if available
       if (this.memory && this.threadId) {
-        await this.storeMessageInMemory(input, 'user', 'text');
+        try {
+          await this.storeMessageInMemory(input, 'user', 'text');
+        } catch (memoryError) {
+          // Log the error but continue with generation
+          logger.warn(`Failed to store user message in memory: ${memoryError}`);
+          span.setAttribute('memory.store.error', true);
+          span.setAttribute('memory.store.error.message', String(memoryError));
+        }
       }
 
-      // Generate the response
-      const response = await this.agent.generate(input, options);
-      logger.debug('Response generated successfully');
+      // Set up retry mechanism for generation
+      let attempts = 0;
+      const maxAttempts = options.maxRetries || 3;
+      let response;
+      let lastError;
+
+      while (attempts < maxAttempts) {
+        try {
+          // Use generateText from the 'ai' package
+          const generatePromise = generateText({
+            model: google(this.modelName),
+            temperature: this.temperature,
+            maxTokens: this.maxTokens,
+            topP: this.topP,
+            topK: this.topK,
+            prompt: input,
+            ...validatedOptions
+          });
+
+          // Wait for the promise to resolve
+          const generateResult = await generatePromise;
+
+          // Create a response object that matches the expected interface
+          response = {
+            text: generateResult.text,
+            raw: generateResult
+          };
+
+          logger.debug('Response generated successfully');
+          break; // Exit the retry loop if successful
+        } catch (genError) {
+          attempts++;
+          lastError = genError;
+          logger.warn(`Generation attempt ${attempts} failed: ${genError}`);
+          span.setAttribute('generation.retry', attempts);
+
+          if (attempts < maxAttempts) {
+            // Exponential backoff with jitter
+            const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1) + Math.random() * 1000, 10000);
+            logger.debug(`Retrying in ${backoffMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+          }
+        }
+      }
+
+      // If all attempts failed, throw the last error
+      if (!response) {
+        throw lastError || new Error('Failed to generate response after multiple attempts');
+      }
 
       // Calculate completion tokens and latency
       const completionTokens = response.text ? simpleTokenCounter(response.text) : 0;
@@ -327,76 +410,100 @@ export class BaseAgent {
 
       throw error;
     }
+
   }
 
   /**
    * Prepare memory context for the agent
-   * @param _input - User input (not used directly but kept for clarity)
+   * @param input - User input for semantic search
    * @param options - Agent options
    */
-  private async prepareMemoryContext(_input: string, options: any = {}) {
-    // If memory is available, set up the thread and context
-    if (this.memory) {
+  private async prepareMemoryContext(input: string, options: any = {}) {
+    // If memory is not available, skip context preparation
+    if (!this.memory) {
+      logger.debug('No memory configured, skipping context preparation');
+      return;
+    }
+
+    // Validate options with Zod
+    const validatedOptions = MemoryContextOptionsSchema.parse(options);
+
+    try {
       // Get or create thread ID
-      this.threadId = options.threadId || this.threadId;
-      this.resourceId = options.resourceId || this.resourceId || 'default';
+      this.threadId = validatedOptions.threadId || this.threadId;
+      this.resourceId = validatedOptions.resourceId || this.resourceId || 'default';
 
       if (!this.threadId) {
         logger.debug('Creating new thread for agent interaction');
-        this.threadId = await this.memory.createThread();
-        logger.debug(`New thread created with ID: ${this.threadId}`);
-
-        // Save thread metadata if resourceId is provided and method exists
-        if (this.resourceId && typeof (this.memory as any).saveThreadMetadata === 'function') {
-          try {
-            await (this.memory as any).saveThreadMetadata(this.threadId, this.resourceId, {
-              agentType: this.type,
-              modelName: this.modelName,
-              createdAt: new Date().toISOString()
-            });
-            logger.debug('Thread metadata saved successfully');
-          } catch (error) {
-            logger.error(`Error saving thread metadata: ${error}`);
-          }
-        }
-      }
-
-      // Add thread and resource IDs to options
-      options.threadId = this.threadId;
-      options.resourceId = this.resourceId;
-
-      // If semantic search is requested and method exists
-      if (options.semanticQuery && typeof (this.memory as any).getMessages === 'function') {
-        logger.debug(`Performing semantic search with query: ${options.semanticQuery}`);
         try {
-          // Call getMessages with the appropriate parameters
-          // Note: We're using a standard approach that works with most memory implementations
-          const semanticResults = await (this.memory as any).getMessages(this.threadId);
-
-          if (semanticResults && semanticResults.length > 0) {
-            // Filter results based on semantic similarity (simplified approach)
-            const filteredResults = this.filterMessagesByRelevance(
-              semanticResults,
-              options.semanticQuery,
-              options.semanticLimit || 5
-            );
-
-            if (filteredResults.length > 0) {
-              logger.debug(`Found ${filteredResults.length} relevant messages from memory`);
-              // Add semantic results to the context
-              options.context = options.context || {};
-              options.context.semanticResults = filteredResults;
-            }
+          // Try to create a thread with the resourceId
+          if (typeof this.memory.createThread === 'function') {
+            // Use type assertion to handle potential parameter differences
+            this.threadId = await (this.memory as any).createThread(this.resourceId);
+            logger.debug(`New thread created with ID: ${this.threadId} for resource: ${this.resourceId}`);
+          } else {
+            logger.warn('Memory instance does not have createThread method');
           }
         } catch (error) {
-          logger.error(`Error performing semantic search: ${error}`);
+          logger.error(`Error creating thread: ${error}`);
+          // Generate a fallback thread ID if creation fails
+          this.threadId = `fallback-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          logger.debug(`Using fallback thread ID: ${this.threadId}`);
         }
       }
 
-      // If working memory is enabled and method exists
-      if (options.useWorkingMemory && typeof (this.memory as any).getWorkingMemory === 'function') {
+      // Update thread and resource IDs in validated options
+      validatedOptions.threadId = this.threadId;
+      validatedOptions.resourceId = this.resourceId;
+
+      // Handle semantic search if requested
+      if ((validatedOptions.semanticQuery || validatedOptions.vectorSearch) && input) {
+        const query = validatedOptions.semanticQuery || input;
+        const limit = validatedOptions.semanticLimit || 5;
+
+        logger.debug(`Performing semantic search with query: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`);
+
         try {
-          const workingMemory = await (this.memory as any).getWorkingMemory(this.threadId);
+          let semanticResults;
+
+          // Try different memory methods based on what's available
+          if (typeof (this.memory as any).query === 'function') {
+            // Modern memory implementation with query method
+            semanticResults = await (this.memory as any).query(this.threadId, {
+              vectorSearchString: query,
+              topK: limit,
+              messageRange: validatedOptions.messageRange || 100
+            });
+          } else if (typeof (this.memory as any).getMessages === 'function') {
+            // Legacy implementation - get all messages and filter locally
+            const allMessages = await (this.memory as any).getMessages(this.threadId);
+            if (allMessages && allMessages.length > 0) {
+              semanticResults = this.filterMessagesByRelevance(allMessages, query, limit);
+            }
+          }
+
+          if (semanticResults && semanticResults.length > 0) {
+            logger.debug(`Found ${semanticResults.length} relevant messages from memory`);
+            // Add semantic results to the context
+            options.context = options.context || {};
+            options.context.semanticResults = semanticResults;
+          }
+        } catch (error) {
+          logger.warn(`Error performing semantic search: ${error}`);
+          // Continue execution despite semantic search failure
+        }
+      }
+
+      // Handle working memory if enabled
+      if (validatedOptions.useWorkingMemory) {
+        try {
+          let workingMemory;
+
+          // Try different memory methods based on what's available
+          if (typeof (this.memory as any).getWorkingMemory === 'function') {
+            workingMemory = await (this.memory as any).getWorkingMemory(this.threadId || '');
+          }
+
           if (workingMemory) {
             logger.debug('Retrieved working memory for context');
             // Add working memory to the context
@@ -404,9 +511,29 @@ export class BaseAgent {
             options.context.workingMemory = workingMemory;
           }
         } catch (error) {
-          logger.error(`Error retrieving working memory: ${error}`);
+          logger.warn(`Error retrieving working memory: ${error}`);
+          // Continue execution despite working memory failure
         }
       }
+
+      // Apply memory processors if specified
+      if (validatedOptions.applyProcessors) {
+        try {
+          logger.debug('Applying memory processors');
+          // Use type assertion to handle potential method differences
+          if (typeof (this.memory as any).applyProcessors === 'function') {
+            await (this.memory as any).applyProcessors(this.threadId || '', validatedOptions.processors);
+          }
+        } catch (error) {
+          logger.warn(`Error applying memory processors: ${error}`);
+          // Continue execution despite processor failure
+        }
+      }
+
+      logger.debug('Memory context preparation completed successfully');
+    } catch (error) {
+      logger.warn(`Error in memory context preparation: ${error}`);
+      // Don't throw, just log the error and continue
     }
   }
 
@@ -457,7 +584,7 @@ export class BaseAgent {
    * @param type - Message type (text, tool-call, tool-result)
    * @returns The stored message
    */
-  private async storeMessageInMemory(content: string, role: 'user' | 'assistant' | 'system' | 'tool', type: 'text' | 'tool-call' | 'tool-result') {
+  private async storeMessageInMemory(content: string, role: z.infer<typeof MessageRoleSchema>, type: z.infer<typeof MessageTypeSchema>) {
     if (!this.memory || !this.threadId) {
       return null;
     }

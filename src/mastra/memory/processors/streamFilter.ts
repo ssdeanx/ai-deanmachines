@@ -1,12 +1,12 @@
 /**
  * StreamFilter processor for Mastra memory
- * 
+ *
  * This processor filters messages in real-time as they flow through the memory system.
  * It can be used to include or exclude messages based on custom criteria.
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * Type for filter predicate function
@@ -72,26 +72,26 @@ export class StreamFilter implements MemoryProcessor {
         filteredMessages = [...messages];
       } else {
         // Include messages that match at least one include predicate
-        filteredMessages = messages.filter(message => 
+        filteredMessages = messages.filter(message =>
           this.includePredicates.some(predicate => predicate(message))
         );
       }
 
       // Then exclude messages that match any exclude predicate
       if (this.excludePredicates.length > 0) {
-        filteredMessages = filteredMessages.filter(message => 
+        filteredMessages = filteredMessages.filter(message =>
           !this.excludePredicates.some(predicate => predicate(message))
         );
       }
     } else {
       // Exclude mode: exclude messages that match any exclude predicate
-      filteredMessages = messages.filter(message => 
+      filteredMessages = messages.filter(message =>
         !this.excludePredicates.some(predicate => predicate(message))
       );
 
       // Then include only messages that match at least one include predicate (if any)
       if (this.includePredicates.length > 0) {
-        filteredMessages = filteredMessages.filter(message => 
+        filteredMessages = filteredMessages.filter(message =>
           this.includePredicates.some(predicate => predicate(message))
         );
       }
@@ -150,11 +150,11 @@ export const CommonFilters = {
       if (typeof message.content !== 'string') {
         return !include; // If not a string, exclude by default
       }
-      
+
       const content = caseSensitive ? message.content : message.content.toLowerCase();
       const searchText = caseSensitive ? text : text.toLowerCase();
       const contains = content.includes(searchText);
-      
+
       return include ? contains : !contains;
     };
   }

@@ -6,7 +6,7 @@
  */
 
 import { Message, MemoryProcessor, MessageRole, MessageType } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * Time window configuration

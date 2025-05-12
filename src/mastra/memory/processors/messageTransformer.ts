@@ -1,12 +1,12 @@
 /**
  * MessageTransformer processor for Mastra memory
- * 
+ *
  * This processor transforms message content in real-time as it flows through the memory system.
  * It can be used to format, sanitize, or enhance message content before it's sent to the LLM.
  */
 
 import { Message, MemoryProcessor } from '../types';
-import { logger } from '../../index';
+import { logger } from '../../observability/logger';
 
 /**
  * Type for transformation function
@@ -119,7 +119,7 @@ export const CommonTransforms = {
         for (const pattern of patterns) {
           newContent = newContent.replace(pattern, '[REDACTED]');
         }
-        
+
         if (newContent !== message.content) {
           return {
             ...message,
@@ -141,10 +141,10 @@ export const CommonTransforms = {
       if (typeof message.content === 'string' && message.content.includes('```')) {
         // Simple regex to find and format code blocks
         const formattedContent = message.content.replace(
-          /```(\w*)\n([\s\S]*?)```/g, 
+          /```(\w*)\n([\s\S]*?)```/g,
           (_, lang, code) => `\`\`\`${lang}\n${code.trim()}\n\`\`\``
         );
-        
+
         if (formattedContent !== message.content) {
           return {
             ...message,
