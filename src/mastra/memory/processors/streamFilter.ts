@@ -5,7 +5,7 @@
  * It can be used to include or exclude messages based on custom criteria.
  */
 // never name message as coremessage fucking idiot.  they are two different things.
-import { Message, CoreMessage } from 'ai';
+import { CoreMessage } from 'ai';
 import { MemoryProcessor, MemoryProcessorOpts } from '@mastra/core/memory';
 import { createLogger } from '@mastra/core/logger';
 
