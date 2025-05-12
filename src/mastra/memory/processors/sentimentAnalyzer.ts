@@ -114,7 +114,9 @@ export class SentimentAnalyzer implements MemoryProcessor {
 
       // Add sentiment to message metadata
       if (this.extractToMetadata) {
-        processedMessage._sentiment = sentiment;
+        processedMessage.metadata = processedMessage.metadata || {};
+        processedMessage.metadata.sentiment = sentiment;
+        processedMessage._sentiment = sentiment; // For backward compatibility
       }
 
       // Add sentiment annotations to content if configured
@@ -139,7 +141,7 @@ export class SentimentAnalyzer implements MemoryProcessor {
     // Count sentiment words
     let positiveCount = 0;
     let negativeCount = 0;
-    let intensifierCount = 0;
+    let intensifierCount = 0; // Used to track intensity for potential future enhancements
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
@@ -148,7 +150,7 @@ export class SentimentAnalyzer implements MemoryProcessor {
       const isIntensified = i > 0 && this.sentimentWords.intensifiers.includes(words[i - 1]);
       const intensifierMultiplier = isIntensified ? 2 : 1;
 
-      // Count intensifiers
+      // Count intensifiers (useful for calculating overall intensity)
       if (this.sentimentWords.intensifiers.includes(word)) {
         intensifierCount++;
       }
@@ -166,9 +168,17 @@ export class SentimentAnalyzer implements MemoryProcessor {
 
     // Calculate sentiment score
     const totalSentimentWords = positiveCount + negativeCount;
-    const score = totalSentimentWords === 0
+
+    // Calculate intensity factor based on intensifier count
+    const intensityFactor = 1 + (intensifierCount * 0.1); // Increase score by 10% per intensifier
+
+    // Calculate base score
+    let score = totalSentimentWords === 0
       ? 0
       : (positiveCount - negativeCount) / (positiveCount + negativeCount);
+
+    // Apply intensity factor (clamped between -1 and 1)
+    score = Math.max(-1, Math.min(1, score * intensityFactor));
 
     // Determine sentiment label
     let label: 'negative' | 'neutral' | 'positive';

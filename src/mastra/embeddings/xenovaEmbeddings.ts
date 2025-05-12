@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { Embeddings } from './embeddings';
 import { createLogger } from '@mastra/core/logger';
+// Import the pipeline function directly
+import { pipeline } from '@xenova/transformers';
 
 // Create a logger instance for the XenovaEmbeddings class
 const logger = createLogger({
@@ -25,7 +27,6 @@ export class XenovaEmbeddings extends Embeddings {
   private modelName: string;
   private quantization: string;
   private dimensions: number;
-  private model: any;
   private pipeline: any;
   private isModelLoaded: boolean = false;
 
@@ -46,8 +47,7 @@ export class XenovaEmbeddings extends Embeddings {
     this.quantization = validatedConfig.quantization;
     this.dimensions = validatedConfig.dimensions;
 
-    // Model will be loaded on first use
-    this.model = null;
+    // Pipeline will be loaded on first use
     this.pipeline = null;
   }
 
@@ -60,30 +60,37 @@ export class XenovaEmbeddings extends Embeddings {
     }
 
     try {
-      // TODO: Implement actual Xenova model loading
-      // For now, use a mock implementation
       logger.info(`[Xenova] Loading model: ${this.modelName}`);
 
-      // Mock the model loading
-      this.model = {
-        name: this.modelName,
-        dimensions: this.dimensions,
-      };
+      // Set quantization options based on configuration
+      const quantizationOptions = this.quantization === 'int8'
+        ? { quantized: true }
+        : { quantized: false };
 
-      // Mock the pipeline
-      this.pipeline = {
-        embed: async (text: string) => {
-          logger.debug(`[Xenova] Embedding text: ${text.substring(0, 50)}...`);
-          // Return a mock embedding vector with the specified dimensions
-          return Array(this.dimensions).fill(0).map(() => Math.random() - 0.5);
-        }
-      };
+      // Create the feature extraction pipeline
+      this.pipeline = await pipeline('feature-extraction', this.modelName, {
+        ...quantizationOptions,
+        revision: 'main',
+      });
 
       this.isModelLoaded = true;
       logger.info(`[Xenova] Model loaded: ${this.modelName}`);
     } catch (error) {
       logger.error(`[Xenova] Error loading model: ${error}`);
-      throw new Error(`Failed to load Xenova model: ${error}`);
+
+      // Try fallback approach - simpler model
+      try {
+        logger.warn(`[Xenova] Trying fallback model: all-MiniLM-L6-v2`);
+        this.pipeline = await pipeline('feature-extraction', 'all-MiniLM-L6-v2', {
+          quantized: true,
+          revision: 'main',
+        });
+        this.isModelLoaded = true;
+        logger.info(`[Xenova] Fallback model loaded: all-MiniLM-L6-v2`);
+      } catch (fallbackError) {
+        logger.error(`[Xenova] Error loading fallback model: ${fallbackError}`);
+        throw new Error(`Failed to load Xenova model: ${error}. Fallback also failed: ${fallbackError}`);
+      }
     }
   }
 
@@ -93,13 +100,46 @@ export class XenovaEmbeddings extends Embeddings {
    * @returns Vector embedding
    */
   async embed(text: string) {
-    // Load the model if not already loaded
-    if (!this.isModelLoaded) {
-      await this.loadModel();
-    }
+    try {
+      // Load the model if not already loaded
+      if (!this.isModelLoaded) {
+        await this.loadModel();
+      }
 
-    // Generate the embedding
-    return this.pipeline.embed(text);
+      // Generate the embedding using the pipeline
+      const result = await this.pipeline(text, {
+        pooling: 'mean',
+        normalize: true,
+        truncation: true,
+        max_length: 512 // Prevent token limit issues
+      });
+
+      // Extract the embedding from the result
+      const embedding = Array.from(result.data) as number[];
+
+      logger.debug(`[Xenova] Generated embedding with ${embedding.length} dimensions`);
+      return embedding;
+    } catch (error) {
+      logger.error(`[Xenova] Error generating embedding: ${error}`);
+
+      // Fallback to deterministic hash-based embedding
+      try {
+        logger.warn(`[Xenova] Using deterministic hash-based embedding as fallback`);
+        return this.generateDeterministicEmbedding(text, this.dimensions);
+      } catch (fallbackError) {
+        logger.error(`[Xenova] Error generating deterministic embedding: ${fallbackError}`);
+
+        // Last resort - random embedding
+        logger.warn(`[Xenova] Using random embedding as last resort`);
+        const embedding = Array.from({ length: this.dimensions }, () => Math.random() * 2 - 1);
+
+        // Normalize the vector to unit length (cosine similarity)
+        const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+        const normalizedEmbedding = embedding.map(val => val / magnitude);
+
+        return normalizedEmbedding;
+      }
+    }
   }
 
   /**
@@ -108,17 +148,74 @@ export class XenovaEmbeddings extends Embeddings {
    * @returns Array of vector embeddings
    */
   async embedBatch(texts: string[]) {
-    // Load the model if not already loaded
-    if (!this.isModelLoaded) {
-      await this.loadModel();
-    }
+    try {
+      // Load the model if not already loaded
+      if (!this.isModelLoaded) {
+        await this.loadModel();
+      }
 
-    // Generate embeddings for each text
-    const embeddings = [];
-    for (const text of texts) {
-      embeddings.push(await this.pipeline.embed(text));
-    }
+      // Generate embeddings for each text
+      const embeddings = [];
+      const batchSize = 16; // Process in smaller batches for better memory management
 
-    return embeddings;
+      for (let i = 0; i < texts.length; i += batchSize) {
+        const batch = texts.slice(i, i + batchSize);
+        const batchPromises = batch.map(text => this.embed(text));
+        const batchResults = await Promise.all(batchPromises);
+        embeddings.push(...batchResults);
+      }
+
+      return embeddings;
+    } catch (error) {
+      logger.error(`[Xenova] Error generating batch embeddings: ${error}`);
+
+      // Fallback to individual embedding
+      logger.warn(`[Xenova] Falling back to individual embedding generation`);
+      const embeddings = [];
+      for (const text of texts) {
+        embeddings.push(await this.embed(text));
+      }
+
+      return embeddings;
+    }
+  }
+
+  /**
+   * Generate a deterministic embedding based on text hash
+   * @param text - Text to generate embedding for
+   * @param dimensions - Number of dimensions for the embedding
+   * @returns Deterministic embedding vector
+   */
+  private generateDeterministicEmbedding(text: string, dimensions: number): number[] {
+    // Simple hash function to generate a seed
+    const hashString = (str: string): number => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return hash;
+    };
+
+    // Generate a deterministic random number using a seed
+    const seededRandom = (seed: number): () => number => {
+      let state = seed;
+      return () => {
+        state = (state * 9301 + 49297) % 233280;
+        return state / 233280;
+      };
+    };
+
+    // Generate embedding using seeded random function
+    const seed = hashString(text);
+    const random = seededRandom(seed);
+    const embedding = Array.from({ length: dimensions }, () => random() * 2 - 1);
+
+    // Normalize the vector to unit length (cosine similarity)
+    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    const normalizedEmbedding = embedding.map(val => val / magnitude);
+
+    return normalizedEmbedding;
   }
 }

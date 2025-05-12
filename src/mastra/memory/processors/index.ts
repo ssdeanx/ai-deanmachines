@@ -24,10 +24,28 @@ import { DuplicateDetector } from './duplicateDetector';
 import { TemporalProcessor, TimeWindow } from './temporalProcessor';
 import { EntityExtractor, EntityType, Entity, EntityPattern } from './entityExtractor';
 import { SentimentAnalyzer, SentimentScore } from './sentimentAnalyzer';
+import {
+  ContextualEnhancer,
+  CommonEnhancements,
+  EnhancementFunction,
+  ContextSourceFunction,
+  EnhancementContext
+} from './contextualEnhancer';
 
 // Import stream processors
 import { MessageTransformer, CommonTransforms } from './messageTransformer';
 import { StreamFilter, CommonFilters } from './streamFilter';
+import {
+  StreamObjectProcessor,
+  CommonStreamTransforms,
+  StreamObjectTransformFunction
+} from './streamObjectProcessor';
+import {
+  StreamAggregator,
+  CommonGroupings,
+  GroupingFunction,
+  AggregationFunction
+} from './streamAggregator';
 
 // Export all processors
 export {
@@ -40,12 +58,18 @@ export {
   TemporalProcessor,
   EntityExtractor,
   SentimentAnalyzer,
+  ContextualEnhancer,
+  CommonEnhancements,
 
   // Stream processors
   MessageTransformer,
   CommonTransforms,
   StreamFilter,
-  CommonFilters
+  CommonFilters,
+  StreamObjectProcessor,
+  CommonStreamTransforms,
+  StreamAggregator,
+  CommonGroupings
 };
 
 // Export types
@@ -54,5 +78,11 @@ export type {
   EntityType,
   Entity,
   EntityPattern,
-  SentimentScore
+  SentimentScore,
+  StreamObjectTransformFunction,
+  GroupingFunction,
+  AggregationFunction,
+  EnhancementFunction,
+  ContextSourceFunction,
+  EnhancementContext
 };

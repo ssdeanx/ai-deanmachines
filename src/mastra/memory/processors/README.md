@@ -154,6 +154,41 @@ const sentimentAnalyzer = new SentimentAnalyzer({
 });
 ```
 
+### ContextualEnhancer
+
+Enhances messages with additional context, references, and metadata to improve the quality and coherence of agent responses.
+
+```typescript
+import { ContextualEnhancer, CommonEnhancements } from '@mastra/memory/processors';
+
+const contextualEnhancer = new ContextualEnhancer({
+  enhancementFunctions: [
+    CommonEnhancements.addRelatedMessages(0.8),
+    CommonEnhancements.addEntityCrossReferences(),
+    CommonEnhancements.addKnowledgeBaseReferences('kb')
+  ],
+  contextSources: [
+    async (message) => {
+      // Example context source that fetches knowledge base data
+      return {
+        kb: {
+          articles: [
+            { id: 'a1', title: 'Getting Started', url: '/docs/getting-started' },
+            { id: 'a2', title: 'Advanced Features', url: '/docs/advanced' }
+          ]
+        }
+      };
+    }
+  ],
+  applyToRoles: ['assistant'],
+  contextWindow: 10,
+  addReferences: true,
+  addMetadata: true,
+  addAnnotations: true,
+  cacheContext: true
+});
+```
+
 ## Stream Processors
 
 ### MessageTransformer
@@ -194,35 +229,213 @@ const streamFilter = new StreamFilter({
 });
 ```
 
+### StreamObjectProcessor
+
+Processes stream objects in real-time as they flow through the memory system, handling complex data structures and transforming them into usable formats.
+
+```typescript
+import { StreamObjectProcessor, CommonStreamTransforms } from '@mastra/memory/processors';
+
+const streamObjectProcessor = new StreamObjectProcessor({
+  transformFunctions: [
+    CommonStreamTransforms.extractFields(['text', 'data', 'metadata']),
+    CommonStreamTransforms.mergeFields(['title', 'description'], ' - ', 'text'),
+    CommonStreamTransforms.formatJsonFields(['data'])
+  ],
+  applyToRoles: ['user', 'assistant', 'tool'],
+  extractTextContent: true,
+  preserveOriginalContent: true,
+  textContentField: 'text'
+});
+```
+
+### StreamAggregator
+
+Aggregates and summarizes multiple messages in real-time as they flow through the memory system, reducing noise and combining related messages.
+
+```typescript
+import { StreamAggregator, CommonGroupings } from '@mastra/memory/processors';
+
+const streamAggregator = new StreamAggregator({
+  groupingFunctions: [
+    CommonGroupings.byRoleAndType(),
+    CommonGroupings.byContentSimilarity(0.8)
+  ],
+  applyToRoles: ['user', 'assistant', 'tool'],
+  applyToTypes: ['text', 'tool-result'],
+  minMessagesToAggregate: 3,
+  maxMessagesToAggregate: 10,
+  timeWindowMs: 120000 // 2 minutes
+});
+```
+
 ## Using Processors with Memory
 
 ```typescript
 import { Memory } from '@mastra/memory';
-import { 
-  TokenLimiter, 
+import {
+  TokenLimiter,
   ToolCallFilter,
   ContextualSummarizer,
-  PriorityRanker
+  PriorityRanker,
+  StreamObjectProcessor,
+  CommonStreamTransforms,
+  MessageTransformer,
+  CommonTransforms,
+  StreamFilter,
+  CommonFilters,
+  SentimentAnalyzer,
+  EntityExtractor,
+  DuplicateDetector,
+  TemporalProcessor,
+  StreamAggregator,
+  CommonGroupings,
+  ContextualEnhancer,
+  CommonEnhancements
 } from '@mastra/memory/processors';
 
-// Create memory processors
-const tokenLimiter = new TokenLimiter({ tokenLimit: 127000 });
+// Create standard memory processors
+const tokenLimiter = new TokenLimiter({ tokenLimit: 1000000 });
 const toolCallFilter = new ToolCallFilter();
-const contextualSummarizer = new ContextualSummarizer();
-const priorityRanker = new PriorityRanker();
+const contextualSummarizer = new ContextualSummarizer({
+  maxMessages: 50,
+  summaryInterval: 20,
+  preserveSystemMessages: true,
+  preserveRecentMessages: 10
+});
+const priorityRanker = new PriorityRanker({
+  maxMessages: 50,
+  preserveSystemMessages: true,
+  preserveRecentMessages: 5,
+  importanceFactors: {
+    recency: 0.6,
+    role: { system: 1.0, user: 0.9, assistant: 0.8, tool: 0.4 },
+    length: 0.3,
+    keywords: ['important', 'critical', 'urgent', 'remember', 'key', 'essential'],
+    keywordWeight: 0.9
+  }
+});
+const duplicateDetector = new DuplicateDetector({
+  similarityThreshold: 0.85,
+  compareContent: true,
+  ignoreCase: true,
+  ignoreWhitespace: true,
+  preserveNewest: true
+});
+const temporalProcessor = new TemporalProcessor({
+  mode: 'annotate',
+  addTimestamps: true,
+  addRelativeTime: true
+});
+const entityExtractor = new EntityExtractor({
+  addEntityAnnotations: false,
+  extractToMetadata: true,
+  customEntities: {
+    product: ['Widget Pro', 'SuperApp', 'MegaTool'],
+    department: ['Sales', 'Marketing', 'Engineering']
+  }
+});
+const sentimentAnalyzer = new SentimentAnalyzer({
+  addSentimentAnnotations: false,
+  extractToMetadata: true,
+  analyzeUserMessages: true,
+  analyzeAssistantMessages: true
+});
+
+const contextualEnhancer = new ContextualEnhancer({
+  enhancementFunctions: [
+    CommonEnhancements.addRelatedMessages(0.8),
+    CommonEnhancements.addEntityCrossReferences(),
+    CommonEnhancements.addKnowledgeBaseReferences('kb')
+  ],
+  contextSources: [
+    async (message) => {
+      // Example context source that fetches knowledge base data
+      return {
+        kb: {
+          articles: [
+            { id: 'a1', title: 'Getting Started', url: '/docs/getting-started' },
+            { id: 'a2', title: 'Advanced Features', url: '/docs/advanced' }
+          ]
+        }
+      };
+    }
+  ],
+  contextWindow: 10,
+  addReferences: true,
+  cacheContext: true
+});
+
+// Create stream processors
+const streamObjectProcessor = new StreamObjectProcessor({
+  transformFunctions: [
+    CommonStreamTransforms.extractFields(['text', 'data', 'metadata']),
+    CommonStreamTransforms.mergeFields(['title', 'description'], ' - ', 'text'),
+    CommonStreamTransforms.formatJsonFields(['data'])
+  ],
+  extractTextContent: true,
+  preserveOriginalContent: true,
+  textContentField: 'text'
+});
+const streamAggregator = new StreamAggregator({
+  groupingFunctions: [
+    CommonGroupings.byRoleAndType(),
+    CommonGroupings.byContentSimilarity(0.8)
+  ],
+  applyToRoles: ['user', 'assistant', 'tool'],
+  applyToTypes: ['text', 'tool-result'],
+  minMessagesToAggregate: 3,
+  maxMessagesToAggregate: 10,
+  timeWindowMs: 120000 // 2 minutes
+});
+const messageTransformer = new MessageTransformer({
+  transformFunctions: [
+    CommonTransforms.truncateContent(8000),
+    CommonTransforms.removeSensitiveInfo([
+      /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, // Credit card pattern
+      /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // Email pattern
+      /\b(?:\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g // Phone number pattern
+    ]),
+    CommonTransforms.formatCodeBlocks()
+  ],
+  applyToRoles: ['user', 'assistant', 'tool'],
+  applyToTypes: ['text', 'tool-result']
+});
+const streamFilter = new StreamFilter({
+  mode: 'exclude',
+  excludePredicates: [
+    CommonFilters.byContent('ignore this message', false, true),
+    CommonFilters.byContent('confidential', false, true),
+    CommonFilters.byContent('private', false, true)
+  ]
+});
 
 // Create memory with processors
 const memory = new Memory({
   provider: 'upstash',
   options: {
     url: process.env.UPSTASH_REDIS_URL,
-    token: process.env.UPSTASH_REDIS_TOKEN
+    token: process.env.UPSTASH_REDIS_TOKEN,
+    vectorUrl: process.env.UPSTASH_VECTOR_URL,
+    vectorToken: process.env.UPSTASH_VECTOR_TOKEN
   },
   processors: [
-    tokenLimiter,
-    toolCallFilter,
-    contextualSummarizer,
-    priorityRanker
+    // Stream processors (process messages as they flow through)
+    streamFilter,           // First filter out unwanted messages
+    streamObjectProcessor,  // Then process complex objects
+    streamAggregator,       // Then aggregate related messages
+    messageTransformer,     // Then transform message content
+
+    // Standard processors (process batches of messages)
+    toolCallFilter,         // Remove unnecessary tool calls
+    duplicateDetector,      // Remove duplicate messages
+    contextualSummarizer,   // Summarize long conversations
+    priorityRanker,         // Rank messages by importance
+    temporalProcessor,      // Add temporal information
+    entityExtractor,        // Extract entities
+    sentimentAnalyzer,      // Analyze sentiment
+    contextualEnhancer,     // Enhance with additional context
+    tokenLimiter            // Finally, limit tokens
   ]
 });
 ```
