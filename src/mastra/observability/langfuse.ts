@@ -3,7 +3,6 @@ import {
   MastraTelemetryConfig,
   TelemetryExportConfig,
   LangfuseGenerationOptions,
-  LangfuseSpanOptions,
   LangfuseEventOptions,
   LangfuseScoreOptions,
   LangfuseFeedbackOptions
@@ -57,8 +56,11 @@ const SpanOptionsSchema = z.object({
   output: z.any().optional(),
   metadata: z.record(z.any()).optional(),
   startTime: z.date().optional(),
-  endTime: z.date().optional()
+  endTime: z.date().optional(),
+  level: z.string().optional()
 });
+
+export type MastraSpanOptions = z.infer<typeof SpanOptionsSchema>;
 
 const EventOptionsSchema = z.object({
   traceId: z.string().min(1, "Trace ID is required"),
@@ -396,7 +398,7 @@ export function trackLLMUsage(options: LangfuseGenerationOptions): string | unde
  * @param options - Options for tracking the span
  * @returns The span ID if successful, undefined otherwise
  */
-export function trackSpan(options: LangfuseSpanOptions): string | undefined {
+export function trackSpan(options: MastraSpanOptions): string | undefined {
   try {
     // Validate options with Zod
     const result = SpanOptionsSchema.safeParse(options);

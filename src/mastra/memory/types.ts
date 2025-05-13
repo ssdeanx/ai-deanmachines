@@ -12,8 +12,12 @@ import { CoreMessage } from 'ai';
  */
 export const SemanticRecallConfigSchema = z.object({
   enabled: z.boolean().default(true),
+  type: z.enum(["text-stream"]).optional(),
   topK: z.number().min(1).default(5),
-  messageRange: z.number().min(1).default(100),
+  messageRange: z.object({
+    before: z.number().min(0).default(7),
+    after: z.number().min(0).default(2),
+  }).default({ before: 7, after: 2 }),
   threshold: z.number().min(0).max(1).optional(),
 });
 
@@ -27,6 +31,7 @@ export type SemanticRecallConfig = z.infer<typeof SemanticRecallConfigSchema>;
  */
 export const WorkingMemoryConfigSchema = z.object({
   enabled: z.boolean().default(true),
+  type: z.enum(["text-stream"]).optional(),
   template: z.string().optional(),
   updateFrequency: z.number().min(1).default(5),
 });
@@ -129,9 +134,9 @@ export interface Thread {
   createdAt: Date;
   metadata?: Record<string, any>;
   messages: Message[]; // Holds the actual message objects when retrieved
-  resourceId?: string; 
-  title?: string; 
-  updatedAt?: Date; 
+  resourceId: string; // Made non-optional
+  title: string; // Made non-optional
+  updatedAt: Date; // Made non-optional
 }
 
 /**
@@ -177,11 +182,11 @@ export interface MemoryRecord {
  * Storage interface
  */
 export interface Storage {
-  set(_key: string, _value: string): Promise<boolean>; // Keep params for clarity, linters might complain
-  get(_key: string): Promise<string | null>; // Keep params for clarity
-  delete(_key: string): Promise<boolean>; // Keep params for clarity
-  lpush?(_key: string, _value: string): Promise<boolean>; // Keep params for clarity
-  lrange?(_key: string, _start: number, _end: number): Promise<string[]>; // Keep params for clarity
+  set(_key: string, _value: string): Promise<boolean>; 
+  get(_key: string): Promise<string | null>; 
+  delete(_key: string): Promise<boolean>; 
+  lpush?(_key: string, _value: string): Promise<boolean>; 
+  lrange?(_key: string, _start: number, _end: number): Promise<string[]>; 
 }
 
 /**
@@ -195,10 +200,10 @@ export interface MemoryProvider {
   deleteThread(threadId: string): Promise<void>;
 
   // Message Management
-  addMessage(threadId: string, message: Omit<Message, 'id' | 'createdAt' | 'thread_id'>): Promise<Message>; // thread_id will be set internally
+  addMessage(threadId: string, message: Omit<Message, 'id' | 'createdAt' | 'thread_id'>): Promise<Message>; 
   getMessage(messageId: string): Promise<Message | null>;
   updateMessage(messageId: string, updates: Partial<Message>): Promise<Message | null>;
-  deleteMessage(messageId: string, threadId?: string): Promise<void>; // Added optional threadId as it's often needed
+  deleteMessage(messageId: string, threadId?: string): Promise<void>; 
   getMessages(threadId: string, limit?: number, before?: string, after?: string): Promise<Message[]>;
 
   // Semantic Search
@@ -234,3 +239,35 @@ export interface MemoryProvider {
  */
 export type MemoryProcessorAlias = MemoryProcessor; 
 export type IMemoryProcessor = MemoryProcessor;
+
+/**
+ * Enhanced memory configuration schema
+ */
+export const EnhancedMemoryConfigSchema = MemoryConfigSchema.extend({
+  highTokenLimits: z.boolean().optional(),
+  customProcessors: z.array(z.any()).optional(), 
+});
+
+/**
+ * Enhanced memory configuration type
+ */
+export type EnhancedMemoryConfig = z.infer<typeof EnhancedMemoryConfigSchema>;
+
+// Define ThreadInfo and ThreadManager interfaces
+export interface ThreadInfo {
+  id: string;
+  title?: string;
+  createdAt: Date;
+  lastModified: Date;
+  metadata?: Record<string, any>;
+  usage_details?: Record<string, unknown>;
+  cost_details?: Record<string, unknown>;
+}
+
+export interface ThreadManager {
+  getOrCreateThread(threadId: string, initialTitle?: string): Promise<ThreadInfo>;
+  getThread(threadId: string): Promise<ThreadInfo | undefined>;
+  listThreads(limit?: number, offset?: number): Promise<ThreadInfo[]>;
+  updateThread(threadId: string, updates: Partial<Pick<ThreadInfo, 'title' | 'metadata'>>): Promise<ThreadInfo | undefined>;
+  deleteThread(threadId: string): Promise<boolean>;
+}
