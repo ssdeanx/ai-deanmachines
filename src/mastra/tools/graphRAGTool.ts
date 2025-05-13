@@ -20,11 +20,9 @@ import { z } from 'zod';
 import { createTool, ToolExecutionContext as MastraToolExecutionContext } from '@mastra/core'; // Removed ToolExecutionOptions
 import { GraphRAG } from '@mastra/rag'; // Assuming GraphRAG class is the primary export
 // Removed imports for non-existent specific types from @mastra/rag
-import { createLogger, MastraLogger } from '@mastra/core/logger'; // Corrected logger import
+import { createLogger } from '@mastra/core/logger'; // Corrected logger import
 
-// Removed import for 'node-abort-controller'
-
-const logger: MastraLogger = createLogger({
+const logger = createLogger({
   name: 'Mastra-GraphRAGToolSuite',
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
 });
@@ -261,9 +259,9 @@ export const createGraphRAGTools = (config: MastraGraphRAGToolsConfig) => {
 
   // Helper to wrap GraphRAG method calls
   const callGraphRAGMethod = async (methodName: string, executionContext: MastraToolExecutionContext<any>, ...args: any[]) => {
-    const { runtime, context: toolInput } = executionContext;
-    const currentLogger = runtime?.logger || logger;
-    const abortSignal = runtime?.abortSignal;
+    const { context: toolInput } = executionContext;
+    const currentLogger = logger;
+    const abortSignal = undefined;
 
     currentLogger.debug(`Executing GraphRAG method '${methodName}'`, { toolInputArgs: args, toolInput, abortSignal: !!abortSignal });
 
@@ -295,7 +293,6 @@ export const createGraphRAGTools = (config: MastraGraphRAGToolsConfig) => {
       return { success: false, message: `Error in '${methodName}': ${error.message}` }; // Return a standard error object
     }
   };
-
   // --- Query Tool ---
   const queryTool = createTool({
     id: "graph-rag-query",

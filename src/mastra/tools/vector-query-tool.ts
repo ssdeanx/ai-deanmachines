@@ -37,8 +37,8 @@ export const vectorQueryTool = createTool({
     description: "Queries a vector store using a text input. The text is converted to an embedding, which is then used to find similar documents in the specified vector store.",
     inputSchema: vectorQueryToolInputSchema,
     outputSchema: vectorQueryToolOutputSchema,
-    execute: async (executionContext: ToolExecutionContext<typeof vectorQueryToolInputSchema, typeof vectorQueryToolOutputSchema>) => {
-        const { input, runtime } = executionContext;
+    execute: async (executionContext) => {
+        const { context: input, runtime } = executionContext;
         const { queryText, vectorStoreConfig: originalVectorStoreConfig, embeddingsConfig, indexName, topK, filter } = input;
         const toolLogger = runtime.logger || logger; // Use executionContext logger, fallback to module logger
 
@@ -106,8 +106,7 @@ export const vectorQueryTool = createTool({
             });
             return { success: false, message: error.message || "An unknown error occurred during vector query." };
         }
-    }
-});
+    }});
 
 // Export for toolRegistry
 export const vectorQueryToolDefinition = {

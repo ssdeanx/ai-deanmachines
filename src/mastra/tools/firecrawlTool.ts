@@ -2,9 +2,9 @@
 import { createTool } from "@mastra/core/tools"; 
 import { z } from "zod";
 import { createLogger } from "@mastra/core/logger";
-import { FirecrawlApp, type CrawlOptions as FirecrawlSdkCrawlOptions, type ScrapeOptions as FirecrawlSdkScrapeOptions } from '@firecrawl/sdk'; 
+import { FirecrawlApp, type CrawlOptions as FirecrawlSdkCrawlOptions, type ScrapeOptions as FirecrawlSdkScrapeOptions } from 'firecrawl'; 
 
-const logger = createLogger({ name: "Mastra-FirecrawlTool" });
+const logger = createLogger({ name: "FirecrawlTool" });
 
 const firecrawlToolInputSchema = z.object({
   url: z.string().url().describe("URL of the web page to crawl or scrape"),

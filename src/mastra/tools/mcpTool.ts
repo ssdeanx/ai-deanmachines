@@ -12,6 +12,12 @@ import { createTool, type ToolExecutionContext } from "@mastra/core/tools";
 import { z } from "zod";
 import { MCPClient } from "@mastra/mcp";
 import type { LogMessage, MastraMCPServerDefinition } from "@mastra/mcp";
+import { createLogger } from '@mastra/core/logger'; // Corrected logger import
+
+const logger = createLogger({
+  name: 'MCP',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+});
 
 const mcpToolInputSchema = z.object({
   serverUrl: z.string().url().describe("URL of the MCP server"),
