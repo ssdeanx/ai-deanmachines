@@ -1,6 +1,12 @@
 import { mcpTool } from './mcpTool';
 import { createGraphRAGTool } from './graphRAGTool'; // Assuming it's exported as a creation function
 import { vercelWeatherTool } from './vercelWeatherTool';
+import { firecrawlTool } from './firecrawlTool';
+import { 
+  githubGetRepoInfoTool, 
+  githubListIssuesTool, 
+  githubCreateIssueTool 
+} from './githubTool'; // Updated import for specific GitHub tools
 
 
 // Placeholder instances for GraphRAGTool configuration
@@ -15,6 +21,10 @@ export const toolRegistry = {
   mcpTool,
   graphRAGTool,
   vercelWeatherTool,
+  firecrawlTool,
+  githubGetRepoInfoTool, // Added specific GitHub tool
+  githubListIssuesTool,  // Added specific GitHub tool
+  githubCreateIssueTool, // Added specific GitHub tool
   // Add other tools here as they are created
 };
 

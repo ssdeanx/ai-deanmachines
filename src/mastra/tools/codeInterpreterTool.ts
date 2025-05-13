@@ -1,5 +1,8 @@
 import { createTool, ToolExecutionContext } from '@mastra/core/tools';
 import { Sandbox } from '@e2b/code-interpreter';
+// keep this or import as type you cant run this without it
+import  RuntimeContext  from '@e2b/code-interpreter';
+import { createLogger } from '@mastra/core/logger';
 import { z } from 'zod';
 import { ToolExecutionOptions } from 'ai';
 
