@@ -218,6 +218,9 @@ importers:
       exa-js:
         specifier: ^1.7.0
         version: 1.7.0
+      exit-hook:
+        specifier: ^4.0.0
+        version: 4.0.0
       fast-xml-parser:
         specifier: ^5.2.3
         version: 5.2.3
@@ -254,6 +257,9 @@ importers:
       json-schema:
         specifier: ^0.4.0
         version: 0.4.0
+      json-schema-to-zod:
+        specifier: ^2.6.1
+        version: 2.6.1
       ky:
         specifier: ^1.8.1
         version: 1.8.1

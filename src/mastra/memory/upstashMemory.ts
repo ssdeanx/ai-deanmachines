@@ -1,1523 +1,625 @@
-import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
-import { Redis } from '@upstash/redis';
-import { UpstashStore, UpstashVector } from '@mastra/upstash';
-import { Memory } from './memory';
-import {
-  MessageRole,
-  MessageType,
-  Storage,
-  SemanticRecallConfig,
-  WorkingMemoryConfig,
-  MemoryProcessor,
-  Message
-} from './types';
-import { DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_MEMORY, DEFAULT_VECTOR_SEARCH } from '../constants';
-import { createLogger } from '@mastra/core/logger';
+import { MemoryProvider, MemoryRecord, Thread, Message, User, Assistant, UpstashMemoryConfig } from './types';
 
-// Create a logger instance for the UpstashMemory module
+import { UpstashStore, UpstashVector } from '@mastra/upstash';
+import { createLogger } from '@mastra/core';
+import { v4 as uuidv4 } from 'uuid';
+
 const logger = createLogger({
   name: 'Mastra-UpstashMemory',
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
 });
 
-// Import for embeddings
-let pipeline: any;
-let embeddingModel: any;
+export class UpstashMemory implements MemoryProvider {
+  private store: UpstashStore;
+  private vectorStore?: UpstashVector;
+  private storePrefix: string;
+  private vectorIndexName: string;
 
-// Lazy load the transformers package to avoid issues in environments where it's not available
-async function getEmbeddingPipeline() {
-  if (!pipeline) {
-    try {
-      // Dynamic import to avoid issues in environments where the package is not available
-      const { pipeline: transformersPipeline } = await import('@xenova/transformers');
-      pipeline = transformersPipeline;
-      logger.info('Successfully loaded @xenova/transformers');
-    } catch (error) {
-      logger.error(`Failed to load @xenova/transformers: ${error}`);
-      return null;
-    }
-  }
-
-  if (!embeddingModel) {
-    try {
-      // Initialize the embedding model
-      embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-      logger.info('Successfully loaded embedding model: Xenova/all-MiniLM-L6-v2');
-    } catch (error) {
-      logger.error(`Failed to load embedding model: ${error}`);
-      return null;
-    }
-  }
-
-  return embeddingModel;
-}
-
-// Define the Upstash memory configuration schema
-export const UpstashMemoryConfigSchema = z.object({
-  url: z.string(),
-  token: z.string(),
-  prefix: z.string().optional(),
-  vectorUrl: z.string().optional(),
-  vectorToken: z.string().optional(),
-  vectorIndex: z.string().optional(),
-  dimensions: z.number().optional(),
-  metric: z.enum(['cosine', 'euclidean', 'dotproduct']).optional(),
-  processors: z.array(z.any()).optional(),
-  workingMemoryTemplate: z.string().optional(),
-});
-
-// Export the type from the schema
-export type UpstashMemoryConfig = z.infer<typeof UpstashMemoryConfigSchema>;
-
-/**
- * UpstashMemory class for storing and retrieving conversation history in Upstash Redis
- */
-export class UpstashMemory extends Memory {
-  private url: string;
-  private token: string;
-  private prefix: string;
-  private redis: Redis;
-  private upstashStore: UpstashStore;
-  private storage: Storage;
-
-  // Vector search capabilities
-  private upstashVector?: UpstashVector;
-  private vectorIndex?: string;
-
-  // Memory configuration
-  protected semanticRecall?: SemanticRecallConfig;
-  protected workingMemory?: WorkingMemoryConfig;
-  protected processors: MemoryProcessor[] = [];
-
-  /**
-   * Create a new UpstashMemory instance
-   * @param config - Configuration for the Upstash memory
-   */
   constructor(config: UpstashMemoryConfig) {
-    // Get default working memory template
-    const defaultTemplate = `# User Profile
-## Personal Information
-- Name:
-- Location:
-- Timezone:
+    if (!config.url || !config.token) {
+      throw new Error('Upstash URL and Token are required.');
+    }
 
-## Preferences
-- Communication Style:
-- Interests:
-- Goals:
-
-## Session Context
-- Current Task:
-- Progress:
-- Next Steps:
-
-## Notes
-- Important Details:
-- Follow-up Items:
-`;
-
-    // Set default memory configuration with enhanced options
-    const memoryConfig = {
-      provider: 'upstash' as const,
-      options: config,
-      lastMessages: DEFAULT_MEMORY.LAST_MESSAGES,
-      semanticRecall: {
-        enabled: true,
-        topK: DEFAULT_VECTOR_SEARCH.TOP_K,
-        messageRange: DEFAULT_MEMORY.SEMANTIC_RECALL_MESSAGE_RANGE,
-        threshold: 0.7,
-      },
-      workingMemory: {
-        enabled: true,
-        template: config.workingMemoryTemplate || defaultTemplate,
-        updateFrequency: 5,
-      },
-      processors: config.processors || []
-    };
-
-    super(memoryConfig);
-
-    // Store processors for later use
-    this.processors = config.processors || [];
-
-    // Validate configuration
-    const validatedConfig = UpstashMemoryConfigSchema.parse(config);
-
-    // Set basic properties
-    this.url = validatedConfig.url;
-    this.token = validatedConfig.token;
-    this.prefix = validatedConfig.prefix || DEFAULT_MEMORY.PREFIX;
-
-    // Initialize Upstash Redis client for operations not covered by UpstashStore
-    logger.info(`Initializing Upstash Redis client with URL: ${this.url}`);
-    this.redis = new Redis({
-      url: this.url,
-      token: this.token,
-      automaticDeserialization: false, // We'll handle serialization ourselves
+    this.storePrefix = config.storePrefix || 'mastra:';
+    this.store = new UpstashStore({
+      url: config.url,
+      token: config.token,
     });
 
-    // Initialize Upstash Store from Mastra package
-    logger.info(`Initializing Upstash Store from @mastra/upstash`);
-    this.upstashStore = new UpstashStore({
-      url: this.url,
-      token: this.token,
-    });
-
-    // Initialize Upstash Vector for semantic search capabilities
-    // If specific vector credentials are provided, use them, otherwise use the same as Redis
-    const vectorUrl = validatedConfig.vectorUrl || this.url;
-    const vectorToken = validatedConfig.vectorToken || this.token;
+    const vectorUrl = config.vectorUrl || config.url;
+    const vectorToken = config.vectorToken || config.token;
 
     if (vectorUrl && vectorToken) {
-      logger.info(`Initializing Upstash Vector with URL: ${vectorUrl}`);
-      this.upstashVector = new UpstashVector({
+      this.vectorStore = new UpstashVector({
         url: vectorUrl,
         token: vectorToken,
       });
-      this.vectorIndex = validatedConfig.vectorIndex || DEFAULT_MEMORY.NAMESPACE;
-      logger.debug(`Using vector index: ${this.vectorIndex}`);
-
-      // Create the vector index if it doesn't exist
-      const dimensions = validatedConfig.dimensions || DEFAULT_EMBEDDING_DIMENSIONS.XENOVA;
-      const metric = validatedConfig.metric || 'cosine';
-
-      this.createIndex(this.vectorIndex)
-        .then(success => {
-          if (success) {
-            logger.info(`Vector index ${this.vectorIndex} is ready for use with ${dimensions} dimensions and ${metric} metric`);
-          } else {
-            logger.warn(`Failed to create vector index ${this.vectorIndex}, semantic search may not work properly`);
-          }
-        })
-        .catch(error => {
-          logger.error(`Error creating vector index: ${error}`);
-        });
+      this.vectorIndexName = config.vectorIndexName || 'mastra-memory-vectors';
+      logger.info(`[UpstashMemory] Vector store initialized with URL: ${vectorUrl} and index: ${this.vectorIndexName}`);
     } else {
-      logger.warn('Vector search configuration not provided. Semantic search will not be available.');
+      logger.warn('[UpstashMemory] Vector store URL or Token not provided. Vector operations will be disabled.');
+      this.vectorIndexName = config.vectorIndexName || 'mastra-memory-vectors';
     }
 
-    // Create storage interface that uses both UpstashStore and direct Redis client
-    // We use direct Redis client for operations not covered by UpstashStore
-    this.storage = {
-      set: async (key: string, value: string) => {
-        logger.debug(`[Upstash] Setting ${key}`);
-        try {
-          // Try to use UpstashStore if possible
-          if (key.startsWith('message:')) {
-            // For message storage, use direct Redis since UpstashStore might have different API
-            await this.redis.set(`${this.prefix}${key}`, value);
-          } else if (key.startsWith('thread:') && key.endsWith(':metadata')) {
-            // For thread metadata, use direct Redis
-            await this.redis.set(`${this.prefix}${key}`, value);
-
-            // Also try to update the thread in UpstashStore if possible
-            try {
-              const metadata = JSON.parse(value);
-              const threadId = key.split(':')[1];
-              // Create a minimal thread object with required fields
-              const thread = {
-                id: threadId,
-                resourceId: metadata.resourceId || 'default',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                metadata
-              };
-
-              // Try to save the thread using UpstashStore
-              if (typeof this.upstashStore.saveThread === 'function') {
-                await this.upstashStore.saveThread({ thread });
-                logger.debug(`Thread ${threadId} saved to UpstashStore`);
-              }
-            } catch (threadError) {
-              logger.warn(`Failed to save thread to UpstashStore: ${threadError}`);
-              // Continue with Redis storage only
-            }
-          } else {
-            // For all other keys, use direct Redis
-            await this.redis.set(`${this.prefix}${key}`, value);
-          }
-          return true;
-        } catch (error) {
-          logger.error(`Error in storage.set: ${error}`);
-          // Fall back to direct Redis as a last resort
-          try {
-            await this.redis.set(`${this.prefix}${key}`, value);
-            return true;
-          } catch (fallbackError) {
-            logger.error(`Fallback Redis set also failed: ${fallbackError}`);
-            return false;
-          }
-        }
-      },
-      get: async (key: string) => {
-        logger.debug(`[Upstash] Getting ${key}`);
-        try {
-          // For all keys, use direct Redis for consistency
-          const result = await this.redis.get(`${this.prefix}${key}`);
-          return result as string | null;
-        } catch (error) {
-          logger.error(`Error in storage.get: ${error}`);
-          return null;
-        }
-      },
-      lpush: async (key: string, value: string) => {
-        logger.debug(`[Upstash] Pushing to ${key}`);
-        try {
-          // Use direct Redis client for list operations
-          await this.redis.lpush(`${this.prefix}${key}`, value);
-          return true;
-        } catch (error) {
-          logger.error(`Error in storage.lpush: ${error}`);
-          return false;
-        }
-      },
-      lrange: async (key: string, start: number, end: number) => {
-        logger.debug(`[Upstash] Getting range ${start}-${end} from ${key}`);
-        try {
-          // Use direct Redis client for list range operations
-          const result = await this.redis.lrange(`${this.prefix}${key}`, start, end);
-          return result as string[];
-        } catch (error) {
-          logger.error(`Error in storage.lrange: ${error}`);
-          return [];
-        }
-      }
-    };
+    logger.info('[UpstashMemory] Initialized with UpstashStore.');
+  }
+  getMessage(messageId: string): Promise<Message | null> {
+    throw new Error('Method not implemented.');
+  }
+  updateMessage(messageId: string, updates: Partial<Message>): Promise<Message | null> {
+    throw new Error('Method not implemented.');
+  }
+  deleteMessage(messageId: string, threadId?: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  getMessages(threadId: string, limit?: number, before?: string, after?: string): Promise<Message[]> {
+    throw new Error('Method not implemented.');
+  }
+  findRelatedMessages?(threadId: string, queryEmbedding: number[], options?: { topK?: number; filter?: Record<string, any> | string; }): Promise<MemoryRecord[]> {
+    throw new Error('Method not implemented.');
+  }
+  createUser?(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
+    throw new Error('Method not implemented.');
+  }
+  getUser?(userId: string): Promise<User | null> {
+    throw new Error('Method not implemented.');
+  }
+  updateUser?(userId: string, updates: Partial<User>): Promise<User | null> {
+    throw new Error('Method not implemented.');
+  }
+  deleteUser?(userId: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  createAssistant?(assistant: Omit<Assistant, 'id' | 'createdAt'>): Promise<Assistant> {
+    throw new Error('Method not implemented.');
+  }
+  getAssistant?(assistantId: string): Promise<Assistant | null> {
+    throw new Error('Method not implemented.');
+  }
+  updateAssistant?(assistantId: string, updates: Partial<Assistant>): Promise<Assistant | null> {
+    throw new Error('Method not implemented.');
+  }
+  deleteAssistant?(assistantId: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  saveRecord?(record: MemoryRecord): Promise<MemoryRecord> {
+    throw new Error('Method not implemented.');
+  }
+  getRecord?(recordId: string): Promise<MemoryRecord | null> {
+    throw new Error('Method not implemented.');
+  }
+  deleteRecord?(recordId: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  clearAllData?(): Promise<void> {
+    throw new Error('Method not implemented.');
   }
 
-  /**
-   * Add a message to the memory
-   * @param threadId - ID of the thread
-   * @param content - Content of the message
-   * @param role - Role of the message sender
-   * @param type - Type of the message
-   * @returns The created message
-   */
-  async addMessage(threadId: string, content: string, role: MessageRole, type: MessageType) {
-    const message = {
-      id: uuidv4(),
-      thread_id: threadId,
-      content,
-      role,
-      type,
-      createdAt: new Date()
+  private getPrefixedKey(key: string): string {
+    return `${this.storePrefix}${key}`;
+  }
+
+  private getThreadKey(threadId: string): string {
+    return this.getPrefixedKey(`thread:${threadId}`);
+  }
+
+  private getMessageKey(messageId: string): string {
+    return this.getPrefixedKey(`message:${messageId}`);
+  }
+
+  private getThreadMessagesKey(threadId: string): string {
+    return this.getPrefixedKey(`thread:${threadId}:messages`);
+  }
+
+  private getUserKey(userId: string): string {
+    return this.getPrefixedKey(`user:${userId}`);
+  }
+
+  private getAssistantKey(assistantId: string): string {
+    return this.getPrefixedKey(`assistant:${assistantId}`);
+  }
+
+  private getMemoryRecordKey(recordId: string): string {
+    return this.getPrefixedKey(`memory-record:${recordId}`);
+  }
+
+  async createThread(thread: Partial<Thread>): Promise<Thread> {
+    const threadId = thread.id || uuidv4();
+    const now = new Date();
+    const newThread: Thread = {
+      id: threadId,
+      createdAt: now,
+      updatedAt: now,
+      metadata: thread.metadata || {},
+      messages: [],
+      resourceId: thread.resourceId,
+      title: thread.title,
     };
 
-    // Store message in database with prefix
-    await this.storage.set(`${this.prefix}message:${message.id}`, JSON.stringify(message));
+    const { messages, ...threadToStore } = newThread;
+    const storableThread = {
+      ...threadToStore,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
 
-    // Add message to thread's message list with prefix
-    await this.storage.lpush(`${this.prefix}thread:${threadId}:messages`, message.id);
+    await this.store.redis.set(this.getThreadKey(threadId), JSON.stringify(storableThread));
+    await this.store.redis.set(this.getThreadMessagesKey(threadId), JSON.stringify([]));
 
-    // Store embedding for the message if vector search is enabled
-    if (this.upstashVector && this.vectorIndex && this.semanticRecall?.enabled) {
+    logger.debug(`[UpstashMemory] Created thread: ${threadId}`);
+    return newThread;
+  }
+
+  async getThread(threadId: string): Promise<Thread | null> {
+    const threadDataString = await this.store.redis.get(this.getThreadKey(threadId));
+    if (!threadDataString) {
+      logger.warn(`[UpstashMemory] Thread not found: ${threadId}`);
+      return null;
+    }
+
+    const storedThread = JSON.parse(threadDataString) as Omit<Thread, 'messages' | 'createdAt' | 'updatedAt'> & { createdAt: string, updatedAt: string };
+
+    const messages: Message[] = [];
+    const messageIdsData = await this.store.redis.get(this.getThreadMessagesKey(threadId));
+
+    if (messageIdsData) {
+      const messageIds = JSON.parse(messageIdsData as string) as string[];
+      for (const msgId of messageIds) {
+        const msg = await this.getMessage(msgId);
+        if (msg) {
+          messages.push(msg);
+        }
+      }
+      messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+
+    const fullThread: Thread = {
+      ...storedThread,
+      id: storedThread.id || threadId,
+      messages,
+      createdAt: new Date(storedThread.createdAt),
+      updatedAt: new Date(storedThread.updatedAt),
+    };
+
+    logger.debug(`[UpstashMemory] Retrieved thread: ${threadId}`);
+    return fullThread;
+  }
+
+  async updateThread(threadId: string, updates: Partial<Omit<Thread, 'messages'>>): Promise<Thread | null> {
+    const threadKey = this.getThreadKey(threadId);
+    const currentThreadString = await this.store.redis.get(threadKey);
+    if (!currentThreadString) {
+      logger.warn(`[UpstashMemory] Cannot update. Thread not found: ${threadId}`);
+      return null;
+    }
+
+    const currentStoredThread = JSON.parse(currentThreadString) as Omit<Thread, 'messages' | 'createdAt' | 'updatedAt'> & { createdAt: string, updatedAt: string };
+    const newUpdatedAt = new Date();
+
+    const updatedStoredThread = {
+      ...currentStoredThread,
+      ...updates,
+      id: threadId,
+      updatedAt: newUpdatedAt.toISOString(),
+    };
+
+    await this.store.redis.set(threadKey, JSON.stringify(updatedStoredThread));
+    logger.debug(`[UpstashMemory] Updated thread metadata: ${threadId}`);
+
+    return this.getThread(threadId);
+  }
+
+  async deleteThread(threadId: string): Promise<void> {
+    const messageIdsData = await this.store.redis.get(this.getThreadMessagesKey(threadId));
+    if (messageIdsData) {
+      const messageIds = JSON.parse(messageIdsData as string) as string[];
+      const deletePromises: Promise<void>[] = [];
+      for (const messageId of messageIds) {
+        deletePromises.push(this.deleteMessage(messageId, threadId));
+      }
+      await Promise.all(deletePromises);
+    }
+    await this.store.redis.del(this.getThreadMessagesKey(threadId));
+    await this.store.redis.del(this.getThreadKey(threadId));
+    logger.debug(`[UpstashMemory] Deleted thread: ${threadId}`);
+  }
+
+  async addMessage(threadId: string, message: Omit<Message, 'id' | 'createdAt' | 'thread_id'>): Promise<Message> {
+    const threadKey = this.getThreadKey(threadId);
+    const threadExistsData = await this.store.redis.get(threadKey);
+    if (!threadExistsData) {
+      logger.error(`[UpstashMemory] Thread not found: ${threadId}. Cannot add message.`);
+      throw new Error(`Thread not found: ${threadId}`);
+    }
+
+    const messageId = uuidv4();
+    const now = new Date();
+    const newMessage: Message = {
+      id: messageId,
+      thread_id: threadId,
+      createdAt: now,
+      content: message.content,
+          type: newMessage.type,
+          content: newMessage.content,
+          createdAt: newMessage.createdAt.toISOString(),
+        };
+        if (newMessage.name) metadataForVector.name = newMessage.name;
+
+        await this.vectorStore.upsert({
+          indexName: this.vectorIndexName,
+          vectors: newMessage.embedding ? [newMessage.embedding] : [],
+          ids: [messageId],
+          metadata: [metadataForVector],
+        });
+        logger.debug(`[UpstashMemory] Message ${messageId} content upserted to vector store.`);
+      } catch (error) {
+        logger.error(`[UpstashMemory] Error upserting message ${messageId} to vector store: ${error}`);
+      }
+    }
+
+    return newMessage;
+  }
+
+  async getMessage(messageId: string): Promise<Message | null> {
+    const messageData = await this.store.get(this.getMessageKey(messageId));
+    if (!messageData) {
+      logger.warn(`[UpstashMemory] Message not found: ${messageId}`);
+      return null;
+    }
+    const message = JSON.parse(messageData as string) as Message & { createdAt: string };
+    logger.debug(`[UpstashMemory] Retrieved message: ${messageId}`);
+    return { ...message, createdAt: new Date(message.createdAt) };
+  }
+
+  async updateMessage(messageId: string, updates: Partial<Message>): Promise<Message | null> {
+    const messageKey = this.getMessageKey(messageId);
+    const currentMessageData = await this.store.get(messageKey);
+    if (!currentMessageData) {
+      logger.warn(`[UpstashMemory] Cannot update. Message not found: ${messageId}`);
+      return null;
+    }
+    const currentMessage = JSON.parse(currentMessageData as string) as Message;
+    const updatedMessage = { ...currentMessage, ...updates, id: messageId, createdAt: new Date(currentMessage.createdAt) };
+
+    await this.store.set(messageKey, JSON.stringify(updatedMessage));
+    logger.debug(`[UpstashMemory] Updated message: ${messageId}`);
+
+    if (this.vectorStore && (updates.content || updates.embedding)) {
       try {
-        // Generate embedding for the message
-        const embedding = await this.getEmbedding(content);
-        if (embedding) {
-          logger.debug(`Generated embedding for message ${message.id} with ${embedding.length} dimensions`);
-
-          // Create metadata for the vector
-          const metadata = {
-            thread_id: threadId,
-            message_id: message.id,
-            content_preview: content.substring(0, 100),
-            role: role,
-            type: type,
-            timestamp: new Date().toISOString()
+        const embeddingToUpsert = updates.embedding || currentMessage.embedding;
+        if (embeddingToUpsert && typeof updatedMessage.content === 'string') {
+          const metadataForVector: Record<string, any> = {
+            thread_id: updatedMessage.thread_id,
+            messageId: updatedMessage.id,
+            role: updatedMessage.role,
+            type: updatedMessage.type,
+            content: updatedMessage.content,
+            createdAt: updatedMessage.createdAt.toISOString(),
           };
+          if (updatedMessage.name) metadataForVector.name = updatedMessage.name;
 
-          // Try different approaches to store the embedding
-          let success = false;
-
-          // Approach 1: Using index method and upsert
-          if (!success && typeof (this.upstashVector as any).index === 'function') {
-            try {
-              const index = (this.upstashVector as any).index(this.vectorIndex);
-              if (typeof index.upsert === 'function') {
-                await index.upsert([{
-                  id: message.id,
-                  vector: embedding,
-                  metadata
-                }]);
-                logger.debug(`Successfully stored embedding using index.upsert method`);
-                success = true;
-              }
-            } catch (error) {
-              logger.debug(`Error using index.upsert: ${error}`);
-            }
-          }
-
-          // Approach 2: Using direct upsert method
-          if (!success && typeof (this.upstashVector as any).upsert === 'function') {
-            try {
-              await (this.upstashVector as any).upsert([{
-                id: message.id,
-                vector: embedding,
-                metadata
-              }], this.vectorIndex);
-              logger.debug(`Successfully stored embedding using direct upsert method`);
-              success = true;
-            } catch (error) {
-              logger.debug(`Error using direct upsert: ${error}`);
-            }
-          }
-
-          // Approach 3: Using add method
-          if (!success && typeof (this.upstashVector as any).add === 'function') {
-            try {
-              await (this.upstashVector as any).add(
-                this.vectorIndex,
-                message.id,
-                embedding,
-                metadata
-              );
-              logger.debug(`Successfully stored embedding using add method`);
-              success = true;
-            } catch (error) {
-              logger.debug(`Error using add method: ${error}`);
-            }
-          }
-
-          if (success) {
-            logger.info(`Successfully stored embedding for message ${message.id} in vector store`);
-          } else {
-            logger.warn(`Failed to store embedding for message ${message.id} - no compatible method found`);
-          }
+          await this.vectorStore.upsert({
+            indexName: this.vectorIndexName,
+            vectors: [embeddingToUpsert],
+            ids: [messageId],
+            metadata: [metadataForVector],
+          });
+          logger.debug(`[UpstashMemory] Message ${messageId} updated in vector store.`);
+        } else {
+          logger.warn(`[UpstashMemory] Message ${messageId} updated but no embedding or string content provided for vector store update.`);
         }
       } catch (error) {
-        // Log the error but don't fail the message creation
-        logger.error(`Error storing embedding for message: ${error}`);
+        logger.error(`[UpstashMemory] Error updating message ${messageId} in vector store: ${error}`);
       }
     }
-
-    return message;
+    return updatedMessage;
   }
-  /**
-   * Get messages from a thread
-   * @param threadId - ID of the thread
-   * @param limit - Maximum number of messages to retrieve
-   * @param semanticQuery - Optional query for semantic search
-   * @returns Array of messages
-   */
-  async getMessages(threadId: string, limit = 10, semanticQuery?: string): Promise<any[]> {
-    logger.info(`Getting messages from thread ${threadId} with limit ${limit}`);
 
-    // If semantic query is provided and vector search is available, use semantic search
-    if (semanticQuery && this.upstashVector && this.semanticRecall?.enabled) {
-      logger.info(`Performing semantic search with query: ${semanticQuery}`);
-      return this.getMessagesWithSemanticSearch(threadId, semanticQuery, limit);
+  async deleteMessage(messageId: string, threadId?: string): Promise<void> {
+    const message = await this.getMessage(messageId);
+    const actualThreadId = threadId || message?.thread_id;
+
+    if (actualThreadId) {
+      const threadMessagesKey = this.getThreadMessagesKey(actualThreadId);
+      const messageIdsData = await this.store.get(threadMessagesKey);
+      if (messageIdsData) {
+        let messageIds = JSON.parse(messageIdsData as string) as string[];
+        messageIds = messageIds.filter(id => id !== messageId);
+        await this.store.set(threadMessagesKey, JSON.stringify(messageIds));
+      }
+    } else {
+      logger.warn(`[UpstashMemory] thread_id not found for message ${messageId}, cannot remove from thread messages list.`);
     }
 
-    // Otherwise, get recent messages
-    logger.debug(`Getting recent messages from thread ${threadId}`);
+    await this.store.delete(this.getMessageKey(messageId));
+    logger.debug(`[UpstashMemory] Deleted message: ${messageId}`);
 
-    // Get message IDs from thread with prefix
-    const messageIds = await this.storage.lrange(`${this.prefix}thread:${threadId}:messages`, 0, limit - 1);
-    logger.debug(`Found ${messageIds.length} message IDs for thread ${threadId}`);
+    if (this.vectorStore) {
+      try {
+        await this.vectorStore.delete({ ids: [messageId], indexName: this.vectorIndexName });
+        logger.debug(`[UpstashMemory] Message ${messageId} deleted from vector store.`);
+      } catch (error) {
+        logger.error(`[UpstashMemory] Error deleting message ${messageId} from vector store: ${error}`);
+      }
+    }
+  }
 
-    // Get message content for each ID with prefix
-    const messages = [];
-    for (const messageId of messageIds) {
-      const messageJson = await this.storage.get(`${this.prefix}message:${messageId}`);
-      if (messageJson) {
-        messages.push(JSON.parse(messageJson));
+  async getMessages(threadId: string, limit?: number, before?: string, after?: string): Promise<Message[]> {
+    const thread = await this.getThread(threadId);
+    if (!thread || !thread.messages) {
+      logger.warn(`[UpstashMemory] Thread not found or has no messages: ${threadId}`);
+      return [];
+    }
+
+    let messages = [...thread.messages];
+
+    if (after) {
+      const afterIndex = messages.findIndex(m => m.id === after);
+      if (afterIndex !== -1) {
+        messages = messages.slice(afterIndex + 1);
+      } else {
+        messages = [];
+      }
+    }
+    if (before) {
+      const beforeIndex = messages.findIndex(m => m.id === before);
+      if (beforeIndex !== -1) {
+        messages = messages.slice(0, beforeIndex);
+      } else {
+        messages = [];
       }
     }
 
-    logger.debug(`Retrieved ${messages.length} messages for thread ${threadId}`);
+    if (limit !== undefined && limit >= 0) {
+      messages = messages.slice(0, limit);
+    }
+
+    logger.debug(`[UpstashMemory] Retrieved ${messages.length} messages for thread: ${threadId}`);
     return messages;
   }
 
-  /**
-   * Get messages using semantic search
-   * @param threadId - ID of the thread
-   * @param query - Semantic search query
-   * @param limit - Maximum number of messages to retrieve
-   * @returns Array of messages sorted by relevance
-   */
-  private async getMessagesWithSemanticSearch(threadId: string, query: string, limit = 10): Promise<any[]> {
-    if (!this.upstashVector || !this.vectorIndex) {
-      logger.warn('Attempted semantic search without vector capabilities');
-      return this.getMessages(threadId, limit);
+  async findRelatedMessages(
+    threadId: string,
+    queryEmbedding: number[],
+    options?: { topK?: number; filter?: Record<string, any> | string }
+  ): Promise<MemoryRecord[]> {
+    if (!this.vectorStore) {
+      logger.warn('[UpstashMemory] Vector store not initialized. Cannot find related messages.');
+      return [];
     }
-
     try {
-      logger.debug(`Processing semantic query: ${query}`);
+      const topK = options?.topK || 5;
+      const filter = options?.filter || { thread_id: threadId };
 
-      // Preprocess and enhance the query for better search results
-      const enhancedQuery = this.enhanceSearchQuery(query);
-      logger.debug(`Enhanced query: ${enhancedQuery}`);
-
-      // Get the embeddings for the query
-      const queryEmbedding = await this.getEmbedding(enhancedQuery);
-      if (!queryEmbedding) {
-        logger.warn('Failed to generate embedding for query');
-        return this.getMessages(threadId, limit);
-      }
-
-      // Search for similar messages in the vector store
-      const topK = this.semanticRecall?.topK || 5;
-      const threshold = this.semanticRecall?.threshold || 0.7;
-
-      try {
-        // Use the Upstash Vector API to search for similar messages
-        let searchResults = await this.performVectorSearch(threadId, queryEmbedding, topK);
-
-        logger.debug(`Found ${searchResults.length} semantic search results`);
-
-        if (searchResults.length === 0) {
-          // Try with a more relaxed search if no results found
-          logger.debug('No results found with initial search, trying with relaxed parameters');
-          searchResults = await this.performVectorSearch(threadId, queryEmbedding, topK * 2, threshold * 0.8);
-
-          if (searchResults.length === 0) {
-            // Fall back to regular message retrieval if still no results
-            logger.debug('No results found with relaxed search, falling back to regular message retrieval');
-            return this.getMessages(threadId, limit);
-          }
-        }
-
-        // Extract message IDs from search results
-        const messageIds = searchResults.map((result: any) => result.id);
-
-        // Get the full message content for each result
-        const messages = [];
-        for (const messageId of messageIds) {
-          const messageJson = await this.storage.get(`${this.prefix}message:${messageId}`);
-          if (messageJson) {
-            const message = JSON.parse(messageJson);
-            // Add relevance score from search results
-            const resultItem = searchResults.find((r: any) => r.id === messageId);
-            if (resultItem) {
-              message.relevance = resultItem.score;
-
-              // Add semantic match information for debugging/transparency
-              message._semanticMatch = {
-                query: enhancedQuery,
-                score: resultItem.score,
-                threshold: threshold,
-                matchedAt: new Date().toISOString()
-              };
+      let filterString: string | undefined = undefined;
+      if (typeof filter === 'string') {
+        filterString = filter;
+      } else if (typeof filter === 'object' && filter !== null) {
+        if (filter.thread_id && typeof filter.thread_id === 'string') {
+          filterString = `metadata.thread_id = "${filter.thread_id}"`;
+        } else {
+          const filterParts = Object.entries(filter).map(([key, value]) => {
+            if (typeof value === 'string') {
+              return `metadata.${key} = "${value}"`;
+            } else if (typeof value === 'number' || typeof value === 'boolean') {
+              return `metadata.${key} = ${value}`;
             }
-            messages.push(message);
+            return '';
+          }).filter(part => part !== '');
+          if (filterParts.length > 0) {
+            filterString = filterParts.join(' AND ');
+          } else {
+            logger.warn(`[UpstashMemory] Complex object filter provided for findRelatedMessages. Could not construct simple filter string. Filter: ${JSON.stringify(filter)}`);
           }
         }
-
-        // Sort messages by relevance score (highest first)
-        messages.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-
-        // Take only the top results if we have more than the limit
-        const topMessages = messages.slice(0, limit);
-
-        // Get context around the most relevant messages if needed
-        if (this.semanticRecall?.messageRange && this.semanticRecall.messageRange > 0) {
-          const messagesWithContext = await this.addContextToSemanticResults(threadId, topMessages);
-          // Apply processors to the messages
-          return this.applyProcessors(messagesWithContext);
-        }
-
-        // Apply processors to the messages
-        return this.applyProcessors(topMessages);
-      } catch (vectorError) {
-        logger.error(`Error querying vector store: ${vectorError}`);
-        return this.fallbackSemanticSearch(threadId, query, limit);
       }
-    } catch (error) {
-      logger.error(`Error performing semantic search: ${error}`);
-      // Fall back to regular message retrieval
-      return this.getMessages(threadId, limit);
-    }
-  }
 
-  /**
-   * Perform vector search using multiple approaches
-   * @param threadId - ID of the thread
-   * @param queryEmbedding - Query embedding vector
-   * @param topK - Maximum number of results to return
-   * @param threshold - Optional similarity threshold
-   * @returns Array of search results
-   */
-  private async performVectorSearch(
-    threadId: string,
-    queryEmbedding: number[],
-    topK: number,
-    threshold?: number
-  ): Promise<any[]> {
-    let searchResults = [];
-    let success = false;
+      logger.debug(`[UpstashMemory] Finding related messages for thread ${threadId} with filter: ${filterString || 'none'}`);
 
-    // Try different approaches to query the vector store
-    const approaches = [
-      this.vectorSearchApproach1.bind(this),
-      this.vectorSearchApproach2.bind(this),
-      this.vectorSearchApproach3.bind(this),
-      this.vectorSearchApproach4.bind(this)
-    ];
+      const results = await this.vectorStore.query({
+        indexName: this.vectorIndexName,
+        queryVector: queryEmbedding,
+        topK,
+        includeVector: false,
+        includeMetadata: true,
+        filter: filterString,
+      });
 
-    // Try each approach until one succeeds
-    for (const approach of approaches) {
-      if (success) break;
-
-      try {
-        const result = await approach(threadId, queryEmbedding, topK, threshold);
-        if (result && result.length > 0) {
-          searchResults = result;
-          success = true;
-        }
-      } catch (error) {
-        logger.debug(`Vector search approach failed: ${error}`);
-        // Continue to the next approach
-      }
-    }
-
-    if (!success) {
-      logger.warn(`All vector query approaches failed.`);
-      throw new Error('No compatible vector query method found');
-    }
-
-    return searchResults;
-  }
-
-  /**
-   * Vector search approach 1: Using index method and query
-   */
-  private async vectorSearchApproach1(
-    threadId: string,
-    queryEmbedding: number[],
-    topK: number,
-    threshold?: number
-  ): Promise<any[]> {
-    if (typeof (this.upstashVector as any).index !== 'function') {
-      return [];
-    }
-
-    const index = (this.upstashVector as any).index(this.vectorIndex);
-    if (typeof index.query !== 'function') {
-      return [];
-    }
-
-    const queryParams: any = {
-      vector: queryEmbedding,
-      topK,
-      includeMetadata: true,
-      filter: { thread_id: threadId }
-    };
-
-    // Add threshold if provided
-    if (threshold !== undefined) {
-      queryParams.threshold = threshold;
-    }
-
-    const result = await index.query(queryParams);
-
-    if (result && Array.isArray(result.matches)) {
-      logger.debug(`Successfully queried vector store using index.query method`);
-      return result.matches;
-    }
-
-    return [];
-  }
-
-  /**
-   * Vector search approach 2: Using direct query method with object parameter
-   */
-  private async vectorSearchApproach2(
-    threadId: string,
-    queryEmbedding: number[],
-    topK: number,
-    threshold?: number
-  ): Promise<any[]> {
-    if (typeof (this.upstashVector as any).query !== 'function') {
-      return [];
-    }
-
-    const queryParams: any = {
-      vector: queryEmbedding,
-      topK,
-      includeMetadata: true,
-      filter: { thread_id: threadId },
-      namespace: this.vectorIndex
-    };
-
-    // Add threshold if provided
-    if (threshold !== undefined) {
-      queryParams.threshold = threshold;
-    }
-
-    const result = await (this.upstashVector as any).query(queryParams);
-
-    // Handle different result formats
-    if (result) {
-      if (Array.isArray(result)) {
-        logger.debug(`Successfully queried vector store using direct query with object parameter (array result)`);
-        return result;
-      } else if (Array.isArray(result.matches)) {
-        logger.debug(`Successfully queried vector store using direct query with object parameter (matches result)`);
-        return result.matches;
-      } else if (Array.isArray(result.results)) {
-        logger.debug(`Successfully queried vector store using direct query with object parameter (results property)`);
-        return result.results;
-      }
-    }
-
-    return [];
-  }
-
-  /**
-   * Vector search approach 3: Using direct query method with separate parameters
-   */
-  private async vectorSearchApproach3(
-    _threadId: string, // Unused but kept for consistent interface
-    queryEmbedding: number[],
-    topK: number,
-    threshold?: number
-  ): Promise<any[]> {
-    if (typeof (this.upstashVector as any).query !== 'function') {
-      return [];
-    }
-
-    // Create query parameters
-    const queryParams: any[] = [this.vectorIndex, queryEmbedding, topK];
-
-    // Add threshold if provided
-    if (threshold !== undefined) {
-      const options: any = { threshold };
-      queryParams.push(options);
-    }
-
-    const result = await (this.upstashVector as any).query(...queryParams);
-
-    // Handle different result formats
-    if (result) {
-      if (Array.isArray(result)) {
-        logger.debug(`Successfully queried vector store using direct query with separate parameters (array result)`);
-        return result;
-      } else if (Array.isArray(result.matches)) {
-        logger.debug(`Successfully queried vector store using direct query with separate parameters (matches result)`);
-        return result.matches;
-      } else if (Array.isArray(result.results)) {
-        logger.debug(`Successfully queried vector store using direct query with separate parameters (results property)`);
-        return result.results;
-      }
-    }
-
-    return [];
-  }
-
-  /**
-   * Vector search approach 4: Using search method
-   */
-  private async vectorSearchApproach4(
-    _threadId: string, // Unused but kept for consistent interface
-    queryEmbedding: number[],
-    topK: number,
-    threshold?: number
-  ): Promise<any[]> {
-    if (typeof (this.upstashVector as any).search !== 'function') {
-      return [];
-    }
-
-    // Create search parameters
-    const searchParams: any[] = [this.vectorIndex, queryEmbedding, topK];
-
-    // Add threshold if provided
-    if (threshold !== undefined) {
-      const options: any = { threshold };
-      searchParams.push(options);
-    }
-
-    const result = await (this.upstashVector as any).search(...searchParams);
-
-    // Handle different result formats
-    if (result) {
-      if (Array.isArray(result)) {
-        logger.debug(`Successfully queried vector store using search method (array result)`);
-        return result;
-      } else if (Array.isArray(result.matches)) {
-        logger.debug(`Successfully queried vector store using search method (matches result)`);
-        return result.matches;
-      } else if (Array.isArray(result.results)) {
-        logger.debug(`Successfully queried vector store using search method (results property)`);
-        return result.results;
-      }
-    }
-
-    return [];
-  }
-
-  /**
-   * Enhance search query for better results
-   * @param query - Original search query
-   * @returns Enhanced search query
-   */
-  private enhanceSearchQuery(query: string): string {
-    if (!query || typeof query !== 'string') {
-      return '';
-    }
-
-    // Remove common filler words
-    const fillerWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'about'];
-    let enhancedQuery = query.split(' ')
-      .filter(word => !fillerWords.includes(word.toLowerCase()))
-      .join(' ');
-
-    // If query is too short after filtering, use original
-    if (enhancedQuery.length < 3) {
-      enhancedQuery = query;
-    }
-
-    return enhancedQuery;
-  }
-
-  /**
-   * Fallback semantic search implementation when vector search fails
-   * @param threadId - ID of the thread
-   * @param query - Search query
-   * @param limit - Maximum number of results to return
-   * @returns Array of messages sorted by relevance
-   */
-  private async fallbackSemanticSearch(threadId: string, query: string, limit: number): Promise<any[]> {
-    logger.info('Falling back to basic semantic search implementation');
-
-    try {
-      // Get recent messages
-      const recentMessages = await this.getMessages(threadId, Math.max(20, limit * 2));
-
-      if (!recentMessages || recentMessages.length === 0) {
-        logger.warn(`No messages found for thread ${threadId} in fallback search`);
+      if (!results || results.length === 0) {
+        logger.debug('[UpstashMemory] No related messages found from vector store.');
         return [];
       }
 
-      // Assign relevance scores based on simple text matching
-      const scoredMessages = recentMessages.map(msg => {
-        // Calculate a simple relevance score based on word overlap
-        const content = typeof msg.content === 'string' ? msg.content : '';
-        const queryWords = query.toLowerCase().split(/\s+/);
-        const contentWords = content.toLowerCase().split(/\s+/);
+      const memoryRecords: MemoryRecord[] = results
+        .map((result) => {
+          const metadata = result.metadata as Record<string, any> || {};
+          return {
+            id: result.id,
+            content: metadata.content,
+            role: metadata.role,
+            type: metadata.type,
+            thread_id: metadata.thread_id,
+            messageId: metadata.messageId,
+            metadata: metadata,
+            score: result.score,
+            createdAt: metadata.createdAt ? new Date(metadata.createdAt) : undefined,
+          } as MemoryRecord;
+        })
+        .filter(record => record.id !== undefined && record.score !== undefined);
 
-        // Count matching words
-        let matchCount = 0;
-        for (const word of queryWords) {
-          if (contentWords.includes(word)) {
-            matchCount++;
-          }
-        }
-
-        // Calculate relevance
-        const baseRelevance = queryWords.length > 0 ? matchCount / queryWords.length : 0;
-
-        // Boost score for exact phrase matches
-        const exactPhraseBoost = content.toLowerCase().includes(query.toLowerCase()) ? 0.3 : 0;
-
-        // Boost score for recent messages
-        const recencyBoost = 0.1; // Small boost for recency
-
-        // Calculate final score
-        const relevance = Math.min(1, baseRelevance + exactPhraseBoost + recencyBoost);
-
-        return {
-          ...msg,
-          relevance,
-          _semanticMatch: {
-            query,
-            score: relevance,
-            method: 'fallback',
-            matchedAt: new Date().toISOString()
-          }
-        };
-      });
-
-      // Sort by relevance (highest first)
-      scoredMessages.sort((a: any, b: any) => b.relevance - a.relevance);
-
-      // Take top results
-      const topK = this.semanticRecall?.topK || 5;
-      const topResults = scoredMessages.slice(0, topK);
-
-      // Get context around the most relevant messages if needed
-      if (this.semanticRecall?.messageRange && this.semanticRecall.messageRange > 0) {
-        try {
-          const resultsWithContext = await this.addContextToSemanticResults(threadId, topResults);
-          // Apply processors to the messages
-          return this.applyProcessors(resultsWithContext);
-        } catch (contextError) {
-          logger.error(`Error adding context to semantic results: ${contextError}`);
-          // Continue with just the top results
-        }
-      }
-
-      // Apply processors to the messages
-      return this.applyProcessors(topResults);
-    } catch (error) {
-      logger.error(`Error in fallback semantic search: ${error}`);
+      logger.debug(`[UpstashMemory] Found ${memoryRecords.length} related messages.`);
+      return memoryRecords;
+    } catch (error: any) {
+      logger.error('[UpstashMemory] Error finding related messages:', { message: error.message, stack: error.stack });
       return [];
     }
   }
 
-
-  /**
-   * Add context messages around semantic search results
-   * @param threadId - ID of the thread
-   * @param semanticResults - Messages found through semantic search
-   * @returns Array of messages with context
-   */
-  private async addContextToSemanticResults(threadId: string, semanticResults: any[]) {
-    if (semanticResults.length === 0) {
-      return [];
-    }
-
-    // Get all message IDs for the thread
-    const allMessageIds = await this.storage.lrange(`${this.prefix}thread:${threadId}:messages`, 0, -1);
-
-    // Create a map of message IDs to their positions in the thread
-    const messagePositions = new Map();
-    allMessageIds.forEach((id, index) => {
-      messagePositions.set(id, index);
-    });
-
-    // Get the context range
-    const contextRange = Math.floor((this.semanticRecall?.messageRange || 2) / 2);
-
-    // Create a set to track which messages we've already included
-    const includedMessageIds = new Set();
-    const resultWithContext = [];
-
-    // For each semantic result, add context messages
-    for (const message of semanticResults) {
-      const messageId = message.id;
-
-      // Skip if we've already included this message
-      if (includedMessageIds.has(messageId)) {
-        continue;
-      }
-
-      // Get the position of this message in the thread
-      const position = messagePositions.get(messageId);
-      if (position === undefined) {
-        continue;
-      }
-
-      // Calculate the range of messages to include
-      const startPos = Math.max(0, position - contextRange);
-      const endPos = Math.min(allMessageIds.length - 1, position + contextRange);
-
-      // Get the message IDs in the context range
-      const contextMessageIds = allMessageIds.slice(startPos, endPos + 1);
-
-      // Get the full message content for each context message
-      for (const contextId of contextMessageIds) {
-        // Skip if we've already included this message
-        if (includedMessageIds.has(contextId)) {
-          continue;
-        }
-
-        const messageJson = await this.storage.get(`${this.prefix}message:${contextId}`);
-        if (messageJson) {
-          const contextMessage = JSON.parse(messageJson);
-          // Add to results and mark as included
-          resultWithContext.push(contextMessage);
-          includedMessageIds.add(contextId);
-        }
-      }
-    }
-
-    // Sort messages by their position in the thread
-    resultWithContext.sort((a, b) => {
-      const posA = messagePositions.get(a.id) || 0;
-      const posB = messagePositions.get(b.id) || 0;
-      return posA - posB;
-    });
-
-    return resultWithContext;
+  private getUserKey(userId: string): string {
+    return this.getPrefixedKey(`user:${userId}`);
   }
 
-  /**
-   * Generate an embedding for a text string
-   * @param text - Text to generate embedding for
-   * @returns Embedding vector or null if generation fails
-   */
-  private async getEmbedding(text: string): Promise<number[] | null> {
-    try {
-      logger.debug(`Generating embedding for text: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+  private getAssistantKey(assistantId: string): string {
+    return this.getPrefixedKey(`assistant:${assistantId}`);
+  }
 
-      // Preprocess text for better embedding quality
-      const preprocessedText = this.preprocessTextForEmbedding(text);
+  async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
+    const userId = uuidv4();
+    const newUser: User = { id: userId, createdAt: new Date(), ...user };
+    await this.store.set(this.getUserKey(userId), JSON.stringify(newUser));
+    logger.debug(`[UpstashMemory] Created user: ${userId}`);
+    return newUser;
+  }
 
-      // Try multiple embedding approaches in order of preference
-
-      // Approach 1: Use Xenova transformers model (preferred)
-      try {
-        const model = await getEmbeddingPipeline();
-
-        if (model) {
-          // Generate embeddings using the model
-          const result = await model(preprocessedText, {
-            pooling: 'mean',
-            normalize: true,
-            truncation: true,
-            max_length: 512 // Prevent token limit issues
-          });
-
-          // Extract the embedding from the result
-          const embedding = Array.from(result.data) as number[];
-
-          logger.debug(`Generated embedding with ${embedding.length} dimensions using Xenova model`);
-          return embedding;
-        }
-      } catch (modelError) {
-        logger.warn(`Error using Xenova model for embeddings: ${modelError}. Trying alternative approaches.`);
-      }
-
-      // Approach 2: Try to use a cached embedding if available
-      // This would be implemented in a production system
-
-      // Approach 3: Fallback to deterministic embeddings based on text hash
-      // This is better than random embeddings as it will produce the same vector for the same text
-      try {
-        logger.info('Using deterministic hash-based embeddings as fallback');
-
-        const dimensions = 384; // Match MiniLM model dimensions
-        const embedding = this.generateDeterministicEmbedding(preprocessedText, dimensions);
-
-        logger.debug(`Generated deterministic embedding with ${dimensions} dimensions`);
-        return embedding;
-      } catch (hashError) {
-        logger.warn(`Error generating deterministic embeddings: ${hashError}. Using random embeddings.`);
-      }
-
-      // Approach 4: Last resort - random embeddings
-      logger.info('Using random embeddings as last resort');
-      const dimensions = 384;
-      const embedding = Array.from({ length: dimensions }, () => Math.random() * 2 - 1);
-
-      // Normalize the vector to unit length (cosine similarity)
-      const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-      const normalizedEmbedding = embedding.map(val => val / magnitude);
-
-      logger.debug(`Generated random embedding with ${dimensions} dimensions`);
-      return normalizedEmbedding;
-    } catch (error) {
-      logger.error(`Error generating embedding: ${error}`);
+  async getUser(userId: string): Promise<User | null> {
+    const userData = await this.store.get(this.getUserKey(userId));
+    if (!userData) {
+      logger.warn(`[UpstashMemory] User not found: ${userId}`);
       return null;
     }
+    const user = JSON.parse(userData as string) as User & { createdAt: string };
+    logger.debug(`[UpstashMemory] Retrieved user: ${userId}`);
+    return { ...user, createdAt: new Date(user.createdAt) };
   }
 
-  /**
-   * Preprocess text before generating embeddings
-   * @param text - Text to preprocess
-   * @returns Preprocessed text
-   */
-  private preprocessTextForEmbedding(text: string): string {
-    // Convert to string if not already
-    if (typeof text !== 'string') {
-      try {
-        text = JSON.stringify(text);
-      } catch (e) {
-        text = String(text);
-      }
+  async updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
+    const userKey = this.getUserKey(userId);
+    const currentUserData = await this.store.get(userKey);
+    if (!currentUserData) {
+      logger.warn(`[UpstashMemory] Cannot update. User not found: ${userId}`);
+      return null;
     }
-
-    // Normalize whitespace
-    let processed = text.replace(/\s+/g, ' ').trim();
-
-    // Truncate if too long (most embedding models have token limits)
-    const maxChars = 10000; // Approximate character limit
-    if (processed.length > maxChars) {
-      processed = processed.substring(0, maxChars);
-      logger.debug(`Truncated text for embedding from ${text.length} to ${maxChars} characters`);
-    }
-
-    return processed;
+    const currentUser = JSON.parse(currentUserData as string) as User;
+    const updatedUser = { ...currentUser, ...updates, id: userId, createdAt: new Date(currentUser.createdAt) };
+    await this.store.set(userKey, JSON.stringify(updatedUser));
+    logger.debug(`[UpstashMemory] Updated user: ${userId}`);
+    return updatedUser;
   }
 
-  /**
-   * Generate a deterministic embedding based on text hash
-   * @param text - Text to generate embedding for
-   * @param dimensions - Number of dimensions for the embedding
-   * @returns Deterministic embedding vector
-   */
-  private generateDeterministicEmbedding(text: string, dimensions: number): number[] {
-    // Simple string hash function
-    const hashString = (str: string): number => {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-      }
-      return hash;
+  async deleteUser(userId: string): Promise<void> {
+    await this.store.delete(this.getUserKey(userId));
+    logger.debug(`[UpstashMemory] Deleted user: ${userId}`);
+  }
+
+  async createAssistant(assistant: Omit<Assistant, 'id' | 'createdAt'>): Promise<Assistant> {
+    const assistantId = uuidv4();
+    const newAssistant: Assistant = { id: assistantId, createdAt: new Date(), ...assistant };
+    await this.store.set(this.getAssistantKey(assistantId), JSON.stringify(newAssistant));
+    logger.debug(`[UpstashMemory] Created assistant: ${assistantId}`);
+    return newAssistant;
+  }
+
+  async getAssistant(assistantId: string): Promise<Assistant | null> {
+    const assistantData = await this.store.get(this.getAssistantKey(assistantId));
+    if (!assistantData) {
+      logger.warn(`[UpstashMemory] Assistant not found: ${assistantId}`);
+      return null;
+    }
+    const assistant = JSON.parse(assistantData as string) as Assistant & { createdAt: string };
+    logger.debug(`[UpstashMemory] Retrieved assistant: ${assistantId}`);
+    return { ...assistant, createdAt: new Date(assistant.createdAt) };
+  }
+
+  async updateAssistant(assistantId: string, updates: Partial<Assistant>): Promise<Assistant | null> {
+    const assistantKey = this.getAssistantKey(assistantId);
+    const currentAssistantData = await this.store.get(assistantKey);
+    if (!currentAssistantData) {
+      logger.warn(`[UpstashMemory] Cannot update. Assistant not found: ${assistantId}`);
+      return null;
+    }
+    const currentAssistant = JSON.parse(currentAssistantData as string) as Assistant;
+    const updatedAssistant = { ...currentAssistant, ...updates, id: assistantId, createdAt: new Date(currentAssistant.createdAt) };
+    await this.store.set(assistantKey, JSON.stringify(updatedAssistant));
+    logger.debug(`[UpstashMemory] Updated assistant: ${assistantId}`);
+    return updatedAssistant;
+  }
+
+  async deleteAssistant(assistantId: string): Promise<void> {
+    await this.store.delete(this.getAssistantKey(assistantId));
+    logger.debug(`[UpstashMemory] Deleted assistant: ${assistantId}`);
+  }
+
+  private getMemoryRecordKey(recordId: string): string {
+    return this.getPrefixedKey(`memory-record:${recordId}`);
+  }
+
+  async saveRecord(record: MemoryRecord): Promise<MemoryRecord> {
+    const recordId = record.id || record.messageId || uuidv4();
+    const recordToSave: MemoryRecord = {
+      ...record,
+      id: recordId,
+      createdAt: record.createdAt || new Date(),
+    };
+    const storableRecord = {
+      ...recordToSave,
+      createdAt: recordToSave.createdAt instanceof Date ? recordToSave.createdAt.toISOString() : recordToSave.createdAt,
     };
 
-    // Generate a seeded random number
-    const seededRandom = (seed: number): () => number => {
-      let state = seed;
-      return () => {
-        state = (state * 9301 + 49297) % 233280;
-        return state / 233280;
-      };
-    };
+    await this.store.set(this.getMemoryRecordKey(recordId), JSON.stringify(storableRecord));
+    logger.debug(`[UpstashMemory] Saved memory record: ${recordId}`);
 
-    // Generate embedding using text hash as seed
-    const seed = hashString(text);
-    const random = seededRandom(seed);
-
-    // Generate vector components
-    const embedding = Array.from({ length: dimensions }, () => random() * 2 - 1);
-
-    // Normalize to unit length
-    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-    return embedding.map(val => val / magnitude);
-  }
-
-  /**
-   * Create a vector index if it doesn't exist
-   * @param indexName - Name of the index to create
-   * @returns True if successful, false otherwise
-   */
-  private async createIndex(indexName: string): Promise<boolean> {
-    if (!this.upstashVector) {
-      logger.warn('Vector capabilities not available, skipping index creation');
-      return false;
-    }
-
-    try {
-      logger.info(`Creating vector index: ${indexName}`);
-
-      // Use constants for vector dimensions
-      const dimensions = DEFAULT_EMBEDDING_DIMENSIONS.XENOVA || 384;
-
-      // Try to create the index using the Upstash Vector API from @mastra/upstash
+    if (this.vectorStore && recordToSave.vector && recordToSave.content) {
       try {
-        // Check if the index exists using a safe approach with type assertion
-        let indexExists = false;
-
-        try {
-          // Try the most common method name first
-          if (typeof (this.upstashVector as any).indexExists === 'function') {
-            indexExists = await (this.upstashVector as any).indexExists(indexName);
-          } else if (typeof (this.upstashVector as any).exists === 'function') {
-            indexExists = await (this.upstashVector as any).exists(indexName);
-          } else {
-            // If no exists method is found, assume we need to create it
-            indexExists = false;
-          }
-        } catch (checkError) {
-          logger.debug(`Error checking if index exists: ${checkError}. Assuming it doesn't exist.`);
-          indexExists = false;
-        }
-
-        if (!indexExists) {
-          // Create the index with appropriate dimensions for the embedding model
-          logger.info(`Creating vector index ${indexName} with ${dimensions} dimensions`);
-
-          // Try different method names that might be used in the implementation
-          if (typeof (this.upstashVector as any).createIndex === 'function') {
-            await (this.upstashVector as any).createIndex(indexName, {
-              dimensions,
-              metric: 'cosine'
-            });
-          } else if (typeof (this.upstashVector as any).create === 'function') {
-            await (this.upstashVector as any).create(indexName, {
-              dimensions,
-              metric: 'cosine'
-            });
-          } else {
-            // If no create method is found, try to use the index method which might create it
-            if (typeof (this.upstashVector as any).index === 'function') {
-              await (this.upstashVector as any).index(indexName, {
-                dimensions,
-                metric: 'cosine'
-              });
-            } else {
-              throw new Error('No method found to create vector index');
-            }
-          }
-
-          logger.info(`Successfully created vector index: ${indexName}`);
-        } else {
-          logger.info(`Vector index ${indexName} already exists`);
-        }
-
-        return true;
-      } catch (error) {
-        logger.error(`Error creating vector index: ${error}`);
-        return false;
-      }
-    } catch (error) {
-      logger.error(`Error creating vector index: ${error}`);
-      return false;
-    }
-  }
-
-
-
-  /**
-   * Create a new thread
-   * @returns The created thread ID
-   */
-  async createThread() {
-    const threadId = uuidv4();
-    await this.storage.set(`${this.prefix}thread:${threadId}:created`, new Date().toISOString());
-    return threadId;
-  }
-
-  /**
-   * Save thread metadata using UpstashStore
-   * This method demonstrates how to use the UpstashStore for higher-level operations
-   * @param threadId - ID of the thread
-   * @param resourceId - Resource ID (user ID or other identifier)
-   * @param metadata - Metadata to save
-   */
-  async saveThreadMetadata(threadId: string, resourceId: string, metadata: Record<string, any>) {
-    logger.info(`Saving metadata for thread ${threadId}`);
-
-    // Create a thread object in the format expected by UpstashStore
-    const now = new Date();
-    const thread = {
-      id: threadId,
-      resourceId,
-      createdAt: now,
-      updatedAt: now,
-      metadata
-    };
-
-    try {
-      // Use the UpstashStore to save the thread
-      // We're using a try-catch block because the UpstashStore might have additional requirements
-      // that we're not aware of from our limited inspection of the code
-      await this.upstashStore.saveThread({ thread });
-      logger.debug(`Metadata saved for thread ${threadId}`);
-      return thread;
-    } catch (error) {
-      // If the UpstashStore method fails, fall back to using the Redis client directly
-      logger.warn(`Failed to save thread metadata using UpstashStore: ${error}. Falling back to direct Redis.`);
-      const threadKey = `${this.prefix}thread:${threadId}:metadata`;
-      await this.redis.set(threadKey, JSON.stringify(metadata));
-      logger.debug(`Metadata saved for thread ${threadId} using direct Redis`);
-      return thread;
-    }
-  }
-
-  /**
-   * Get or create working memory for a thread
-   * Working memory stores persistent information across conversations
-   * @param threadId - ID of the thread
-   * @returns Working memory object
-   */
-  async getWorkingMemory(threadId: string): Promise<Record<string, any>> {
-    if (!this.workingMemory?.enabled) {
-      logger.debug('Working memory is disabled');
-      return {};
-    }
-
-    logger.info(`Getting working memory for thread ${threadId}`);
-
-    try {
-      // Try to get existing working memory
-      const workingMemoryKey = `${this.prefix}thread:${threadId}:working_memory`;
-      const workingMemoryJson = await this.redis.get(workingMemoryKey);
-
-      if (workingMemoryJson) {
-        logger.debug(`Found existing working memory for thread ${threadId}`);
-        return JSON.parse(workingMemoryJson as string);
-      }
-
-      // If no working memory exists, create a new one with default template
-      logger.debug(`Creating new working memory for thread ${threadId}`);
-      const defaultWorkingMemory = this.createDefaultWorkingMemory();
-
-      // Save the new working memory
-      await this.redis.set(workingMemoryKey, JSON.stringify(defaultWorkingMemory));
-
-      return defaultWorkingMemory;
-    } catch (error) {
-      logger.error(`Error getting working memory: ${error}`);
-      return {};
-    }
-  }
-
-  /**
-   * Update working memory for a thread
-   * @param threadId - ID of the thread
-   * @param workingMemory - Working memory object to save
-   * @returns Updated working memory object
-   */
-  async updateWorkingMemory(threadId: string, workingMemory: Record<string, any>): Promise<Record<string, any>> {
-    if (!this.workingMemory?.enabled) {
-      logger.debug('Working memory is disabled');
-      return workingMemory;
-    }
-
-    logger.info(`Updating working memory for thread ${threadId}`);
-
-    try {
-      // Save the working memory
-      const workingMemoryKey = `${this.prefix}thread:${threadId}:working_memory`;
-      await this.redis.set(workingMemoryKey, JSON.stringify(workingMemory));
-      logger.debug(`Working memory updated for thread ${threadId}`);
-
-      return workingMemory;
-    } catch (error) {
-      logger.error(`Error updating working memory: ${error}`);
-      return workingMemory;
-    }
-  }
-
-  /**
-   * Apply memory processors to a list of messages
-   * @param messages - Array of messages to process
-   * @returns Processed array of messages
-   */
-  protected applyProcessors(messages: Message[]): Message[] {
-    if (!this.processors || this.processors.length === 0) {
-      return messages;
-    }
-
-    logger.debug(`Applying ${this.processors.length} processors to ${messages.length} messages`);
-
-    let processedMessages = [...messages];
-
-    // Apply each processor in sequence
-    for (const processor of this.processors) {
-      try {
-        const beforeCount = processedMessages.length;
-        processedMessages = processor.process(processedMessages);
-        const afterCount = processedMessages.length;
-
-        logger.debug(`Processor ${processor.constructor.name} processed messages: ${beforeCount} -> ${afterCount}`);
-      } catch (error) {
-        logger.error(`Error applying processor ${processor.constructor.name}: ${error}`);
-        // Continue with the next processor if one fails
-      }
-    }
-
-    logger.debug(`After processing: ${messages.length} -> ${processedMessages.length} messages`);
-    return processedMessages;
-  }
-
-
-
-  /**
-   * Create default working memory based on template
-   * @returns Default working memory object
-   */
-  private createDefaultWorkingMemory(): Record<string, any> {
-    // Use template if provided, otherwise use a basic structure
-    if (this.workingMemory?.template) {
-      try {
-        // For JSON templates
-        if (this.workingMemory.template.trim().startsWith('{')) {
-          return JSON.parse(this.workingMemory.template);
-        }
-
-        // For Markdown templates, create a structured object
-        return {
-          content: this.workingMemory.template,
-          lastUpdated: new Date().toISOString()
+        const metadataForVector: Record<string, any> = {
+          ...(recordToSave.metadata || {}),
+          thread_id: recordToSave.thread_id,
+          messageId: recordToSave.messageId,
+          role: recordToSave.role,
+          content: recordToSave.content,
+          createdAt: recordToSave.createdAt instanceof Date ? recordToSave.createdAt.toISOString() : recordToSave.createdAt,
         };
+
+        await this.vectorStore.upsert({
+          indexName: this.vectorIndexName,
+          vectors: [recordToSave.vector],
+          ids: [recordId],
+          metadata: [metadataForVector],
+        });
+        logger.debug(`[UpstashMemory] Memory record ${recordId} upserted to vector store.`);
       } catch (error) {
-        logger.error(`Error parsing working memory template: ${error}`);
+        logger.error(`[UpstashMemory] Error upserting memory record ${recordId} to vector store: ${error}`);
       }
     }
-
-    // Default basic structure
-    return {
-      user: {
-        preferences: {},
-        context: {}
-      },
-      conversation: {
-        topics: [],
-        lastUpdated: new Date().toISOString()
-      }
-    };
+    return recordToSave;
   }
 
-  /**
-   * Get thread metadata using UpstashStore
-   * This method demonstrates how to use the UpstashStore for higher-level operations
-   * @param threadId - ID of the thread
-   * @returns Thread metadata or null if not found
-   */
-  async getThreadMetadata(threadId: string) {
-    logger.info(`Getting metadata for thread ${threadId}`);
-
-    try {
-      // Use the UpstashStore to get the thread
-      const thread = await this.upstashStore.getThreadById({ threadId });
-
-      if (thread) {
-        logger.debug(`Metadata retrieved for thread ${threadId}`);
-        return thread.metadata || {};
-      }
-
-      logger.debug(`No thread found with ID ${threadId}`);
-      return null;
-    } catch (error) {
-      // If the UpstashStore method fails, fall back to using the Redis client directly
-      logger.warn(`Failed to get thread metadata using UpstashStore: ${error}. Falling back to direct Redis.`);
-
-      const threadKey = `${this.prefix}thread:${threadId}:metadata`;
-      const metadata = await this.redis.get(threadKey);
-
-      if (metadata) {
-        try {
-          const parsedMetadata = JSON.parse(metadata as string);
-          logger.debug(`Metadata retrieved for thread ${threadId} using direct Redis`);
-          return parsedMetadata;
-        } catch (parseError) {
-          logger.error(`Failed to parse thread metadata: ${parseError}`);
-          return null;
-        }
-      }
-
-      logger.debug(`No metadata found for thread ${threadId}`);
+  async getRecord(recordId: string): Promise<MemoryRecord | null> {
+    const recordData = await this.store.get(this.getMemoryRecordKey(recordId));
+    if (!recordData) {
+      logger.warn(`[UpstashMemory] Memory record not found: ${recordId}`);
       return null;
     }
+    const record = JSON.parse(recordData as string) as MemoryRecord;
+    if (record.createdAt && typeof record.createdAt === 'string') {
+      record.createdAt = new Date(record.createdAt);
+    }
+    logger.debug(`[UpstashMemory] Retrieved memory record: ${recordId}`);
+    return record;
   }
 
-  /**
-   * Get thread by ID
-   * @param threadId - ID of the thread
-   * @returns Thread object or null if not found
-   */
-  async getThreadById(threadId: string) {
-    logger.info(`Getting thread with ID ${threadId}`);
-
-    try {
-      // Use the UpstashStore to get the thread
-      const thread = await this.upstashStore.getThreadById({ threadId });
-
-      if (thread) {
-        logger.debug(`Thread retrieved with ID ${threadId}`);
-        return thread;
+  async deleteRecord(recordId: string): Promise<void> {
+    await this.store.delete(this.getMemoryRecordKey(recordId));
+    logger.debug(`[UpstashMemory] Deleted memory record from store: ${recordId}`);
+    if (this.vectorStore) {
+      try {
+        await this.vectorStore.delete({ ids: [recordId], indexName: this.vectorIndexName });
+        logger.debug(`[UpstashMemory] Memory record ${recordId} deleted from vector store.`);
+      } catch (error) {
+        logger.error(`[UpstashMemory] Error deleting memory record ${recordId} from vector store: ${error}`);
       }
-
-      // If the thread doesn't exist in the UpstashStore, check if it exists in Redis
-      const createdAt = await this.storage.get(`${this.prefix}thread:${threadId}:created`);
-      if (createdAt) {
-        // Thread exists in Redis but not in UpstashStore
-        // Create a minimal thread object
-        const threadObj = {
-          id: threadId,
-          createdAt: new Date(createdAt),
-          metadata: await this.getThreadMetadata(threadId) || {}
-        };
-        logger.debug(`Thread ${threadId} found in Redis but not in UpstashStore`);
-        return threadObj;
-      }
-
-      logger.debug(`No thread found with ID ${threadId}`);
-      return null;
-    } catch (error) {
-      logger.error(`Error getting thread by ID: ${error}`);
-      return null;
     }
   }
 
-  /**
-   * Get threads by resource ID
-   * @param resourceId - Resource ID to search for
-   * @returns Array of thread objects
-   */
-  async getThreadsByResourceId(resourceId: string) {
-    logger.info(`Getting threads for resource ${resourceId}`);
+  async clearAllData(): Promise<void> {
+    logger.warn(`[UpstashMemory] Attempting to clear all data. This is a complex operation.`);
+    logger.info(`[UpstashMemory] Key-value store clearing by prefix '${this.storePrefix}' is not fully implemented due to Redis SCAN/DEL complexity through the current abstraction. Manual cleanup or a more specific store method would be needed.`);
 
-    try {
-      // Use the UpstashStore to get threads by resource ID
-      const threads = await this.upstashStore.getThreadsByResourceId({ resourceId });
-      logger.debug(`Found ${threads.length} threads for resource ${resourceId}`);
-      return threads;
-    } catch (error) {
-      logger.error(`Error getting threads by resource ID: ${error}`);
-      // Fall back to an empty array if there's an error
-      return [];
-    }
-  }
-
-  /**
-   * Query messages from a thread with various filtering options
-   * @param threadId - ID of the thread
-   * @param options - Query options
-   * @returns Array of messages matching the query
-   */
-  async query(threadId: string, options: any = {}) {
-    logger.info(`Querying thread ${threadId} with options: ${JSON.stringify(options)}`);
-
-    try {
-      // Extract options
-      const limit = options.limit || this.lastMessages;
-      const semanticQuery = options.vectorSearchString;
-      const selectBy = options.selectBy || 'recent';
-
-      // If semantic search is requested and available
-      if (semanticQuery && this.upstashVector && this.vectorIndex && this.semanticRecall?.enabled) {
-        logger.debug(`Performing semantic search with query: ${semanticQuery}`);
-        const messages = await this.getMessagesWithSemanticSearch(threadId, semanticQuery, limit);
-        return {
-          messages,
-          threadId,
-          resourceId: options.resourceId
-        };
+    if (this.vectorStore) {
+      try {
+        logger.info(`[UpstashMemory] Clearing vector data in index '${this.vectorIndexName}' would require deleting and recreating the index or deleting all vectors, which is not implemented here. Please manage vector index data directly via Upstash console or specific SDK methods if needed.`);
+      } catch (error) {
+        logger.error(`[UpstashMemory] Error or placeholder for clearing vector index '${this.vectorIndexName}': ${error}`);
       }
-
-      // Handle different selection methods
-      let resultMessages = [];
-
-      switch (selectBy) {
-        case 'recent': {
-          // Get most recent messages
-          logger.debug(`Getting ${limit} most recent messages from thread ${threadId}`);
-          resultMessages = await this.getMessages(threadId, limit);
-          break;
-        }
-
-        case 'messageIds': {
-          // Get specific messages by IDs
-          if (!options.messageIds || !Array.isArray(options.messageIds)) {
-            logger.warn('No message IDs provided for messageIds selection');
-            resultMessages = [];
-            break;
-          }
-
-          logger.debug(`Getting ${options.messageIds.length} specific messages from thread ${threadId}`);
-          const specificMessages = [];
-          for (const messageId of options.messageIds) {
-            const messageJson = await this.storage.get(`${this.prefix}message:${messageId}`);
-            if (messageJson) {
-              specificMessages.push(JSON.parse(messageJson));
-            }
-          }
-          resultMessages = specificMessages;
-          break;
-        }
-
-        default: {
-          // Default to recent messages
-          logger.debug(`Unknown selection method '${selectBy}', defaulting to recent messages`);
-          resultMessages = await this.getMessages(threadId, limit);
-          break;
-        }
-      }
-
-      // Apply processors to the messages
-      const processedMessages = this.applyProcessors(resultMessages);
-
-      return {
-        messages: processedMessages,
-        threadId,
-        resourceId: options.resourceId
-      };
-    } catch (error) {
-      logger.error(`Error querying thread: ${error}`);
-      return {
-        messages: [],
-        threadId,
-        resourceId: options.resourceId,
-        error: `Failed to query thread: ${error}`
-      };
     }
-  }
-}
+    logger.warn(`[UpstashMemory] clearAllData is a partial implementation. Please review Upstash documentation for complete data removal strategies.`);
+  }}

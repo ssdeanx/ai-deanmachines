@@ -70,10 +70,10 @@ export type MemoryConfig = z.infer<typeof MemoryConfigSchema>;
 export const UpstashMemoryConfigSchema = z.object({
   url: z.string(),
   token: z.string(),
-  prefix: z.string().optional(),
+  storePrefix: z.string().optional(),
   vectorUrl: z.string().optional(),
   vectorToken: z.string().optional(),
-  vectorIndex: z.string().optional(),
+  vectorIndexName: z.string().optional(),
 });
 
 /**
@@ -108,17 +108,17 @@ export type MessageType = 'text' | 'tool-call' | 'tool-result';
  */
 export interface Message {
   id: string;
-  thread_id: string;
-  content: string | Record<string, any>;
+  thread_id: string; // Ensure this matches data-schema.md
+  content: string | Record<string, any>; // Allow content to be object for tool calls
   role: MessageRole;
   type: MessageType;
-  name?: string;
-  timestamp?: string | Date;
+  name?: string; // For tool calls/results
   createdAt: Date;
+  embedding?: number[];
   _tokens?: number;
   _filtered?: boolean;
   _remove?: boolean;
-  [key: string]: any;
+  [key: string]: any; // Allow other properties, but try to define common ones
 }
 
 /**
@@ -128,20 +128,109 @@ export interface Thread {
   id: string;
   createdAt: Date;
   metadata?: Record<string, any>;
+  messages: Message[]; // Holds the actual message objects when retrieved
+  resourceId?: string; 
+  title?: string; 
+  updatedAt?: Date; 
+}
+
+/**
+ * User interface
+ */
+export interface User {
+  id: string;
+  createdAt: Date;
+  metadata?: Record<string, any>;
+  [key: string]: any; // Allow other properties
+}
+
+/**
+ * Assistant interface
+ */
+export interface Assistant {
+  id: string;
+  createdAt: Date;
+  name?: string;
+  model?: string;
+  instructions?: string;
+  metadata?: Record<string, any>;
+  [key: string]: any; // Allow other properties
+}
+
+/**
+ * MemoryRecord interface
+ */
+export interface MemoryRecord {
+  id: string;
+  vector?: number[]; // Embedding vector
+  metadata?: Record<string, any>; // Should contain content, role, type, thread_id, messageId etc.
+  score?: number; // Similarity score
+  content?: string | Record<string, any>; 
+  role?: MessageRole; 
+  type?: MessageType; 
+  thread_id?: string; // Changed from threadId to thread_id for consistency with Message
+  messageId?: string; 
+  createdAt?: Date | string; // Store as ISO string, convert to Date on retrieval
 }
 
 /**
  * Storage interface
  */
 export interface Storage {
-  set(key: string, value: string): Promise<boolean>;
-  get(key: string): Promise<string | null>;
-  lpush(key: string, value: string): Promise<boolean>;
-  lrange(key: string, start: number, end: number): Promise<string[]>;
+  set(_key: string, _value: string): Promise<boolean>; // Keep params for clarity, linters might complain
+  get(_key: string): Promise<string | null>; // Keep params for clarity
+  delete(_key: string): Promise<boolean>; // Keep params for clarity
+  lpush?(_key: string, _value: string): Promise<boolean>; // Keep params for clarity
+  lrange?(_key: string, _start: number, _end: number): Promise<string[]>; // Keep params for clarity
+}
+
+/**
+ * MemoryProvider interface defines the contract for memory storage and retrieval.
+ */
+export interface MemoryProvider {
+  // Thread Management
+  createThread(thread: Partial<Thread>): Promise<Thread>;
+  getThread(threadId: string): Promise<Thread | null>;
+  updateThread(threadId: string, updates: Partial<Thread>): Promise<Thread | null>;
+  deleteThread(threadId: string): Promise<void>;
+
+  // Message Management
+  addMessage(threadId: string, message: Omit<Message, 'id' | 'createdAt' | 'thread_id'>): Promise<Message>; // thread_id will be set internally
+  getMessage(messageId: string): Promise<Message | null>;
+  updateMessage(messageId: string, updates: Partial<Message>): Promise<Message | null>;
+  deleteMessage(messageId: string, threadId?: string): Promise<void>; // Added optional threadId as it's often needed
+  getMessages(threadId: string, limit?: number, before?: string, after?: string): Promise<Message[]>;
+
+  // Semantic Search
+  findRelatedMessages?(
+    threadId: string,
+    queryEmbedding: number[],
+    options?: { topK?: number; filter?: Record<string, any> | string }
+  ): Promise<MemoryRecord[]>;
+
+  // User Management
+  createUser?(user: Omit<User, 'id' | 'createdAt'>): Promise<User>;
+  getUser?(userId: string): Promise<User | null>;
+  updateUser?(userId: string, updates: Partial<User>): Promise<User | null>;
+  deleteUser?(userId: string): Promise<void>;
+
+  // Assistant Management
+  createAssistant?(assistant: Omit<Assistant, 'id' | 'createdAt'>): Promise<Assistant>;
+  getAssistant?(assistantId: string): Promise<Assistant | null>;
+  updateAssistant?(assistantId: string, updates: Partial<Assistant>): Promise<Assistant | null>;
+  deleteAssistant?(assistantId: string): Promise<void>;
+
+  // Generic Memory Record Management
+  saveRecord?(record: MemoryRecord): Promise<MemoryRecord>;
+  getRecord?(recordId: string): Promise<MemoryRecord | null>;
+  deleteRecord?(recordId: string): Promise<void>;
+
+  // Utility
+  clearAllData?(): Promise<void>;
 }
 
 /**
  * Memory processor interface alias
- * Processors modify messages before they are sent to the LLM
  */
+export type MemoryProcessorAlias = MemoryProcessor; 
 export type IMemoryProcessor = MemoryProcessor;

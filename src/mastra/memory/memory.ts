@@ -9,27 +9,24 @@ import {
   SemanticRecallConfig,
   WorkingMemoryConfig,
   Message,
-  MemoryProcessor
+  MemoryProcessor,
+  CoreMessage
 } from './types';
 import { ENV, DEFAULT_MEMORY } from '../constants';
 import { createLogger } from '@mastra/core/logger';
-
+import { Memory } from '@mastra/memory';
 // Create a logger instance for the Memory module
+
 const logger = createLogger({
   name: 'Mastra-Memory',
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' as 'debug' | 'info' | 'warn' | 'error',
 });
-
-/**
- * Memory class for storing and retrieving conversation history
- */
 export class Memory {
   private instance: any;
   protected lastMessages: number;
   protected semanticRecall?: SemanticRecallConfig;
   protected workingMemory?: WorkingMemoryConfig;
   protected processors: MemoryProcessor[] = [];
-
   /**
    * Create a new Memory instance
    * @param config - Configuration for the memory system
@@ -56,10 +53,10 @@ export class Memory {
     // Create the appropriate memory instance based on the provider
     switch (validatedConfig.provider) {
       case 'upstash':
-        this.instance = this.createUpstashMemory(validatedConfig.options);
+        this.instance = this.createUpstashMemory(validatedConfig.options); // Initialize Upstash memory
         break;
       case 'local':
-        this.instance = this.createLocalMemory(validatedConfig.options);
+        this.instance = this.createLocalMemory(validatedConfig.options); // Initialize Local memory
         break;
       default:
         logger.error(`Unsupported memory provider: ${validatedConfig.provider}`);
@@ -76,24 +73,32 @@ export class Memory {
     logger.info(`Creating Upstash memory with options: ${JSON.stringify(options)}`);
 
     // Import UpstashMemory dynamically to avoid circular dependency
-    const { UpstashMemory } = await import('./upstashMemory');
+    const { UpstashMemory, UpstashMemoryConfigSchema } = await import('./upstashMemory');
 
-    // Create and return a new UpstashMemory instance with enhanced options
-    return new UpstashMemory({
+    // Validate Upstash specific options
+    const upstashSpecificOptions = UpstashMemoryConfigSchema.parse({
       url: options?.url || process.env[ENV.UPSTASH_REDIS_URL] || '',
       token: options?.token || process.env[ENV.UPSTASH_REDIS_TOKEN] || '',
-      prefix: options?.prefix || DEFAULT_MEMORY.PREFIX,
-      vectorUrl: options?.vectorUrl || process.env[ENV.UPSTASH_VECTOR_URL],
-      vectorToken: options?.vectorToken || process.env[ENV.UPSTASH_VECTOR_TOKEN],
-      vectorIndex: options?.vectorIndex || options?.namespace || DEFAULT_MEMORY.NAMESPACE || 'mastra-memory'
+      vectorStoreUrl: options?.vectorStoreUrl || process.env[ENV.UPSTASH_VECTOR_URL],
+      vectorStoreToken: options?.vectorStoreToken || process.env[ENV.UPSTASH_VECTOR_TOKEN],
+      vectorIndexName: options?.vectorIndexName || options?.namespace || DEFAULT_MEMORY.NAMESPACE || 'mastra-memory',
+      storePrefix: options?.storePrefix || 'mastra:'
     });
-  }  /**
+
+    if (!upstashSpecificOptions.url || !upstashSpecificOptions.token) {
+      logger.error('[Memory] Upstash URL or Token is missing. Cannot initialize UpstashMemory.');
+      throw new Error('Upstash URL and Token are required for UpstashMemory.');
+    }
+
+    return new UpstashMemory(upstashSpecificOptions);
+  }
+
+  /**
    * Create a local memory instance
    * @param options - Options for the local memory
    * @returns A local memory instance
    */
   private createLocalMemory(options?: Record<string, any>) {
-    // TODO: Implement local memory
     logger.info(`Creating Local memory with options: ${JSON.stringify(options)}`);
 
     // For now, return a mock implementation
@@ -145,21 +150,18 @@ export class Memory {
     for (const processor of this.processors) {
       try {
         const beforeCount = processedMessages.length;
-        processedMessages = processor.process(processedMessages);
+        processedMessages = processor.process(processedMessages as CoreMessage[], {}) as Message[];
         const afterCount = processedMessages.length;
 
         logger.debug(`Processor ${processor.constructor.name} processed messages: ${beforeCount} -> ${afterCount}`);
       } catch (error) {
         logger.error(`Error applying processor ${processor.constructor.name}: ${error}`);
-        // Continue with the next processor if one fails
       }
     }
 
     logger.debug(`After processing: ${messages.length} -> ${processedMessages.length} messages`);
     return processedMessages;
   }
-
-
 
   /**
    * Add a message to the memory
@@ -169,26 +171,25 @@ export class Memory {
    * @param type - Type of the message
    * @returns The created message
    */
-  async addMessage(threadId: string, content: string, role: string, type: string, metadata: { taskType: string; subtaskCount: number; timestamp: string; }, role: MessageRole, type: MessageType) {
+  async addMessage(threadId: string, content: string | Record<string, any>, role: MessageRole, type: MessageType, metadata?: Record<string, any>) {
     logger.info(`Adding message to thread ${threadId} with role ${role} and type ${type}`);
 
-    const message = {
-      id: uuidv4(),
-      thread_id: threadId,
+    const messagePayload = {
       content,
       role,
       type,
-      createdAt: new Date()
+      metadata,
     };
 
-    // Store message in database
-    await this.instance.storage.set(`message:${message.id}`, JSON.stringify(message));
+    const provider = await this.instance;
+    if (!provider || typeof provider.addMessage !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support addMessage.');
+      throw new Error('Memory provider not available or addMessage not implemented.');
+    }
 
-    // Add message to thread's message list
-    await this.instance.storage.lpush(`thread:${threadId}:messages`, message.id);
-
-    logger.debug(`Message ${message.id} added to thread ${threadId}`);
-    return message;
+    const createdMessage = await provider.addMessage(threadId, messagePayload);
+    logger.debug(`Message ${createdMessage.id} added to thread ${threadId} via provider`);
+    return createdMessage;
   }
 
   /**
@@ -196,60 +197,55 @@ export class Memory {
    * @param threadId - ID of the thread
    * @param limit - Maximum number of messages to retrieve
    * @param semanticQuery - Optional query for semantic search
+   * @param before - Pagination parameter
+   * @param after - Pagination parameter
    * @returns Array of messages
    */
-  async getMessages(threadId: string, limit = 10, semanticQuery?: string) {
+  async getMessages(threadId: string, limit?: number, semanticQuery?: string, before?: string, after?: string) {
     logger.info(`Getting messages from thread ${threadId} with limit ${limit}`);
+    const provider = await this.instance;
 
-    // If semantic query is provided and semantic recall is enabled, try to use it
-    if (semanticQuery && this.semanticRecall?.enabled) {
+    if (!provider || typeof provider.getMessages !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support getMessages.');
+      throw new Error('Memory provider not available or getMessages not implemented.');
+    }
+
+    let messages: Message[];
+
+    if (semanticQuery && this.semanticRecall?.enabled && typeof provider.findRelatedMessages === 'function') {
       logger.debug(`Attempting semantic search with query: ${semanticQuery}`);
       try {
-        // Check if the instance has a getMessagesWithSemanticSearch method
-        if (typeof this.instance.getMessagesWithSemanticSearch === 'function') {
-          const semanticResults = await this.instance.getMessagesWithSemanticSearch(
+        const queryEmbedding: number[] = [];
+        if (queryEmbedding.length > 0) {
+          const relatedRecords = await provider.findRelatedMessages(
             threadId,
-            semanticQuery,
-            this.semanticRecall.topK || 5
+            queryEmbedding,
+            { topK: this.semanticRecall.topK || 5 }
           );
-
-          if (semanticResults && semanticResults.length > 0) {
-            logger.debug(`Found ${semanticResults.length} messages through semantic search`);
-            return semanticResults;
-          }
+          messages = relatedRecords.map((record: { id: any; thread_id: any; content: any; role: any; type: any; createdAt: string | number | Date; metadata: any; }) => ({
+            id: record.id,
+            thread_id: record.thread_id || threadId,
+            content: record.content || '',
+            role: record.role || 'assistant',
+            type: record.type || 'text',
+            createdAt: record.createdAt ? new Date(record.createdAt) : new Date(),
+            metadata: record.metadata,
+          }));
+          logger.debug(`Found ${messages.length} messages through semantic search`);
         } else {
-          logger.debug('Semantic search not available in the memory instance');
+          logger.warn('Could not generate embedding for semantic query, falling back to regular retrieval.');
+          messages = await provider.getMessages(threadId, limit ?? this.lastMessages, before, after);
         }
       } catch (error) {
         logger.error(`Error performing semantic search: ${error}`);
+        messages = await provider.getMessages(threadId, limit ?? this.lastMessages, before, after);
       }
+    } else {
+      messages = await provider.getMessages(threadId, limit ?? this.lastMessages, before, after);
     }
 
-    // Fall back to regular message retrieval
-    const actualLimit = limit || this.lastMessages;
-    logger.debug(`Getting recent messages with limit ${actualLimit}`);
-
-    // Get message IDs from thread
-    const messageIds = await this.instance.storage.lrange(`thread:${threadId}:messages`, 0, actualLimit - 1);
-    logger.debug(`Found ${messageIds.length} message IDs for thread ${threadId}`);
-
-    // Get message content for each ID
-    const messages = [];
-    for (const messageId of messageIds) {
-      const messageJson = await this.instance.storage.get(`message:${messageId}`);
-      if (messageJson) {
-        messages.push(JSON.parse(messageJson));
-      } else {
-        logger.warn(`Message ${messageId} not found for thread ${threadId}`);
-      }
-    }
-
-    logger.debug(`Retrieved ${messages.length} messages for thread ${threadId}`);
-
-    // Apply processors to the messages
-    const processedMessages = this.applyProcessors(messages);
-
-    return processedMessages;
+    logger.debug(`Retrieved ${messages.length} messages for thread ${threadId} via provider`);
+    return this.applyProcessors(messages);
   }
 
   /**
@@ -258,32 +254,22 @@ export class Memory {
    * @returns Working memory object
    */
   async getWorkingMemory(threadId: string): Promise<Record<string, any> | null> {
-    // If working memory is not enabled, return null
     if (!this.workingMemory?.enabled) {
       logger.debug('Working memory is disabled');
       return null;
     }
-
     logger.info(`Getting working memory for thread ${threadId}`);
-
-    try {
-      // Check if the instance has a getWorkingMemory method
-      if (typeof this.instance.getWorkingMemory === 'function') {
-        const workingMemory = await this.instance.getWorkingMemory(threadId);
-        if (workingMemory) {
-          logger.debug(`Found working memory for thread ${threadId}`);
-          return workingMemory;
-        }
-      } else {
-        logger.debug('Working memory not available in the memory instance');
+    const provider = await this.instance;
+    if (provider && typeof provider.getWorkingMemory === 'function') {
+      try {
+        return await provider.getWorkingMemory(threadId);
+      } catch (error) {
+        logger.error(`Error getting working memory via provider: ${error}`);
+        return null;
       }
-
-      // If no working memory found or method not available, return null
-      return null;
-    } catch (error) {
-      logger.error(`Error getting working memory: ${error}`);
-      return null;
     }
+    logger.debug('Working memory not available in the memory provider instance or getWorkingMemory not implemented.');
+    return null;
   }
 
   /**
@@ -292,42 +278,84 @@ export class Memory {
    * @param workingMemory - Working memory object to save
    * @returns Updated working memory object
    */
-  async updateWorkingMemory(threadId: string, workingMemory: Record<string, any>): Promise<Record<string, any> | null> {
-    // If working memory is not enabled, return null
+  async updateWorkingMemory(threadId: string, workingMemoryData: Record<string, any>): Promise<Record<string, any> | null> {
     if (!this.workingMemory?.enabled) {
       logger.debug('Working memory is disabled');
       return null;
     }
-
     logger.info(`Updating working memory for thread ${threadId}`);
-
-    try {
-      // Check if the instance has an updateWorkingMemory method
-      if (typeof this.instance.updateWorkingMemory === 'function') {
-        const updatedMemory = await this.instance.updateWorkingMemory(threadId, workingMemory);
-        logger.debug(`Working memory updated for thread ${threadId}`);
-        return updatedMemory;
-      } else {
-        logger.debug('Working memory update not available in the memory instance');
+    const provider = await this.instance;
+    if (provider && typeof provider.updateWorkingMemory === 'function') {
+      try {
+        return await provider.updateWorkingMemory(threadId, workingMemoryData);
+      } catch (error) {
+        logger.error(`Error updating working memory via provider: ${error}`);
         return null;
       }
-    } catch (error) {
-      logger.error(`Error updating working memory: ${error}`);
-      return null;
     }
+    logger.debug('Working memory update not available in the memory provider instance or updateWorkingMemory not implemented.');
+    return null;
   }
 
   /**
    * Create a new thread
-   * @returns The created thread ID
+   * @param threadData - Optional initial data for the thread
+   * @returns The created thread object
    */
-  async createThread() {
-    const threadId = uuidv4();
-    logger.info(`Creating new thread with ID ${threadId}`);
+  async createThread(threadData?: Partial<import('./types').Thread>): Promise<import('./types').Thread> {
+    logger.info(`Creating new thread`);
+    const provider = await this.instance;
+    if (!provider || typeof provider.createThread !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support createThread.');
+      throw new Error('Memory provider not available or createThread not implemented.');
+    }
+    const newThread = await provider.createThread(threadData || {});
+    logger.debug(`Thread ${newThread.id} created successfully via provider`);
+    return newThread;
+  }
 
-    await this.instance.storage.set(`thread:${threadId}:created`, new Date().toISOString());
+  /**
+   * Get a thread by its ID
+   * @param threadId - ID of the thread
+   * @returns The thread object or null if not found
+   */
+  async getThread(threadId: string): Promise<import('./types').Thread | null> {
+    logger.info(`Getting thread ${threadId}`);
+    const provider = await this.instance;
+    if (!provider || typeof provider.getThread !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support getThread.');
+      throw new Error('Memory provider not available or getThread not implemented.');
+    }
+    return provider.getThread(threadId);
+  }
 
-    logger.debug(`Thread ${threadId} created successfully`);
-    return threadId;
+  /**
+   * Update a thread
+   * @param threadId - ID of the thread to update
+   * @param updates - Partial thread data to update
+   * @returns The updated thread object or null if not found
+   */
+  async updateThread(threadId: string, updates: Partial<import('./types').Thread>): Promise<import('./types').Thread | null> {
+    logger.info(`Updating thread ${threadId}`);
+    const provider = await this.instance;
+    if (!provider || typeof provider.updateThread !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support updateThread.');
+      throw new Error('Memory provider not available or updateThread not implemented.');
+    }
+    return provider.updateThread(threadId, updates);
+  }
+
+  /**
+   * Delete a thread
+   * @param threadId - ID of the thread to delete
+   */
+  async deleteThread(threadId: string): Promise<void> {
+    logger.info(`Deleting thread ${threadId}`);
+    const provider = await this.instance;
+    if (!provider || typeof provider.deleteThread !== 'function') {
+      logger.error('[Memory] Memory provider instance is not correctly initialized or does not support deleteThread.');
+      throw new Error('Memory provider not available or deleteThread not implemented.');
+    }
+    return provider.deleteThread(threadId);
   }
 }
