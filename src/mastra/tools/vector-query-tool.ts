@@ -1,10 +1,10 @@
-import { createTool, ToolExecutionContext, ToolRuntime } from "@mastra/core/tools";
+import { createTool, ToolExecutionContext } from "@mastra/core/tools";
 import { z } from "zod";
 import { createLogger } from "@mastra/core/logger";
 import { Embeddings, EmbeddingsConfigSchema } from "../embeddings/embeddings";
 import { VectorStore, VectorStoreConfigSchema, QueryResult } from "../knowledge/vectorStore";
 
-const logger = createLogger({ name: "Mastra-VectorQueryTool" });
+const logger = createLogger({ name: "VectorQueryTool" });
 
 // Input Schema
 const vectorQueryToolInputSchema = z.object({
@@ -37,10 +37,10 @@ export const vectorQueryTool = createTool({
     description: "Queries a vector store using a text input. The text is converted to an embedding, which is then used to find similar documents in the specified vector store.",
     inputSchema: vectorQueryToolInputSchema,
     outputSchema: vectorQueryToolOutputSchema,
-    execute: async (executionContext) => {
-        const { context: input, runtime } = executionContext;
+    execute: async (executionContext: ToolExecutionContext<typeof vectorQueryToolInputSchema>) => {
+        const { context: input } = executionContext;
         const { queryText, vectorStoreConfig: originalVectorStoreConfig, embeddingsConfig, indexName, topK, filter } = input;
-        const toolLogger = runtime.logger || logger; // Use executionContext logger, fallback to module logger
+        const toolLogger = logger; // Use executionContext logger, fallback to module logger
 
         toolLogger.info(`Executing Vector Query tool for query: "${queryText.substring(0, 100)}..."`);
 
@@ -107,7 +107,6 @@ export const vectorQueryTool = createTool({
             return { success: false, message: error.message || "An unknown error occurred during vector query." };
         }
     }});
-
 // Export for toolRegistry
 export const vectorQueryToolDefinition = {
     tool: vectorQueryTool,

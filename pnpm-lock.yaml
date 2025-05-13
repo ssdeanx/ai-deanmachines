@@ -57,14 +57,17 @@ importers:
         specifier: ^0.2.8
         version: 0.2.8(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4)
       '@langchain/langgraph':
-        specifier: ^0.2.71
-        version: 0.2.71(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(react@19.1.0)(zod-to-json-schema@3.24.5(zod@3.24.4))
+        specifier: ^0.2.72
+        version: 0.2.72(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(react@19.1.0)(zod-to-json-schema@3.24.5(zod@3.24.4))
+      '@langchain/langgraph-sdk':
+        specifier: ^0.0.74
+        version: 0.0.74(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(react@19.1.0)
       '@lezer/highlight':
         specifier: ^1.2.1
         version: 1.2.1
       '@mastra/core':
-        specifier: 0.9.4-alpha.2
-        version: 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+        specifier: 0.9.4-alpha.3
+        version: 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/evals':
         specifier: ^0.1.22
         version: 0.1.22(ai@4.3.15(react@19.1.0)(zod@3.24.4))(openapi-types@12.1.3)(react@19.1.0)
@@ -75,8 +78,8 @@ importers:
         specifier: ^1.1.22
         version: 1.1.22(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/libsql':
-        specifier: 0.0.4-alpha.2
-        version: 0.0.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+        specifier: 0.0.4-alpha.3
+        version: 0.0.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/loggers':
         specifier: ^0.1.22
         version: 0.1.22(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
@@ -84,14 +87,14 @@ importers:
         specifier: ^0.4.3
         version: 0.4.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@mastra/memory':
-        specifier: 0.3.4-alpha.2
-        version: 0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)
+        specifier: 0.3.4-alpha.3
+        version: 0.3.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/rag':
         specifier: ^0.1.22
         version: 0.1.22(ai@4.3.15(react@19.1.0)(zod@3.24.4))(openapi-types@12.1.3)(react@19.1.0)
       '@mastra/server':
         specifier: ^2.0.3
-        version: 2.0.3(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))
+        version: 2.0.3(@mastra/core@0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))
       '@mastra/store-upstash':
         specifier: ^0.0.5
         version: 0.0.5(react@19.1.0)
@@ -361,11 +364,11 @@ importers:
         specifier: ^5.3.16
         version: 5.3.16
       '@typescript-eslint/eslint-plugin':
-        specifier: ^8.32.0
-        version: 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+        specifier: ^8.32.1
+        version: 8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       '@typescript-eslint/parser':
-        specifier: ^8.32.0
-        version: 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+        specifier: ^8.32.1
+        version: 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       eslint:
         specifier: ^9.26.0
         version: 9.26.0(jiti@2.4.2)
@@ -373,14 +376,14 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       mastra:
-        specifier: 0.6.3-alpha.2
-        version: 0.6.3-alpha.2(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
+        specifier: 0.6.3-alpha.4
+        version: 0.6.3-alpha.4(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
       typescript-eslint:
-        specifier: ^8.32.0
-        version: 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+        specifier: ^8.32.1
+        version: 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
 
 packages:
 
@@ -1918,8 +1921,8 @@ packages:
       react:
         optional: true
 
-  '@langchain/langgraph@0.2.71':
-    resolution: {integrity: sha512-++p6NuU6aQX1aSrB+IDeXbnUCydb72HKiiQPgsGluWs1ZP61VTYydlEU6KPHHHp3JwROBzIbQHXY/G/ygHIrFg==}
+  '@langchain/langgraph@0.2.72':
+    resolution: {integrity: sha512-2Rs79mLSx0Yxr/omiWOXBlaS+eywZ9KACe06pI6XkA3hT2hwqjMlXYMvbeD7mxZlKrPtLsQaHWvL9IO2VAa+lQ==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.36 <0.3.0 || >=0.3.40 < 0.4.0'
@@ -2070,14 +2073,14 @@ packages:
     peerDependencies:
       zod: ^3.24.0
 
-  '@mastra/core@0.9.4-alpha.2':
-    resolution: {integrity: sha512-AVhaP23D7VuenyFV/vxAllxTjWdNZthpMuy9n/NaYqmySYXDY4zrH4TJj4m0hzgZ43b5KXN73DriqEbMYROiiQ==}
+  '@mastra/core@0.9.4-alpha.3':
+    resolution: {integrity: sha512-7yPL1HoaaNtoFkxu4Vsyy8WjXoU3EH862UOeoUbFSaiDELLINjJVmaG1BBNoiB3cTyt2Aopa3XBinye9Wd6wwA==}
     engines: {node: '>=20'}
     peerDependencies:
       zod: ^3.0.0
 
-  '@mastra/deployer@0.3.4-alpha.2':
-    resolution: {integrity: sha512-0NMm/UaBupR/i1Bgn7FMI2TSNqRE2yOVeeaV1H7H2My0SlrY/XcmnDaVfvBU1vruT1ot0xiQwqkfsxvJ5DiI6w==}
+  '@mastra/deployer@0.3.4-alpha.3':
+    resolution: {integrity: sha512-/7T5iOwhHGsl7cFuAPI8MDginsr7yXNYPjtvmroWmu1GH9lztjkID2qQ94lWCfogtiJ2TYy6/7K1vCrP2WOIQA==}
 
   '@mastra/evals@0.1.22':
     resolution: {integrity: sha512-nvC0oEYV588n4u68FtezVz1+sUH4rFzBK2PHOCCbbyTz240gikGRzI+CLxm3rnvXgr6qWqruk0rPfTTtJrAKPg==}
@@ -2092,8 +2095,8 @@ packages:
     resolution: {integrity: sha512-JPMNljuHgOOWMeODM8+EJGl/FpfVFuZq1VeUiVcl7D5wVa+ihVzXRpHMFSRyovJmjdTRT5vSdIv4HGMh14UBuQ==}
     engines: {node: '>=20'}
 
-  '@mastra/libsql@0.0.4-alpha.2':
-    resolution: {integrity: sha512-LbJN1rvVNLa1IjVBC+dW5DQSJmaWtTWSORoII3EQ+uN8jyk2C6kxjx3fzuzxSeWC6sWpen1guU/vH6H/hfSGKA==}
+  '@mastra/libsql@0.0.4-alpha.3':
+    resolution: {integrity: sha512-zbacE2nF/JTVYf/zZrsHg6xWsMjdoCyF2mepzRopc0qTgcXgyXhkCln9Ns18LnpvOQTgBP9zJEtYGxzYLxr6uA==}
 
   '@mastra/loggers@0.1.22':
     resolution: {integrity: sha512-2KEYB8qAKkLJ2mcVaWwlGS4datfGw6wM4vSVHeRfIYX9AYWWiB+jsBrqvOqTYvTiUqbfs8LeHz8sqyD7WqXKvA==}
@@ -2101,8 +2104,8 @@ packages:
   '@mastra/mcp@0.4.3':
     resolution: {integrity: sha512-dT6NCbGegBCYJsr5OQAU48jHI7KtNaFXRpPRHkUENX7/ykRDHlGMAUKOOadMIXdgjI8FHo2dJsLFj9rgN0iNsg==}
 
-  '@mastra/memory@0.3.4-alpha.2':
-    resolution: {integrity: sha512-GdoN8VTPTt+nrgqp2cycWS4vIcaVjKMbRTQdnCqz+L0ruGBv4ghCQtwH9p8PgBCk+5tF0IZFhuw8KDwMCaJqCQ==}
+  '@mastra/memory@0.3.4-alpha.3':
+    resolution: {integrity: sha512-WGPGrhDKQYFX7pkTMLMwe58vBMFJVLu72QyHwlGHk7hzO/YR8gK1r1I8JzMtKISsg/Vx3S0CfIBs+9JTTu+ciw==}
 
   '@mastra/rag@0.1.22':
     resolution: {integrity: sha512-FvfpKqxpCXl0OTFnUau97KFesj24Xufhi3fEqmN5yT617i101FMDk/L2N0U9tQrjK8hsq+rXk50WUbSA3S6XKw==}
@@ -2114,10 +2117,10 @@ packages:
     peerDependencies:
       '@mastra/core': ^0.9.3
 
-  '@mastra/server@2.0.4-alpha.2':
-    resolution: {integrity: sha512-W0rfvdLS6nFg8H0E1ex2nUxVYBNmU7B2/CYbD8Jp6jHGxtNkidO64yONQE+Jw3wHfWOQY60XFxJEPUk8Ok8Keg==}
+  '@mastra/server@2.0.4-alpha.3':
+    resolution: {integrity: sha512-wq3bD0hACF2JtV2aeBnBBEsfUUj7Fi5eoetoKvo1GlUEO4cxjm0edLED8moNvMIbiVnGbL47JSosKTwG3zxKlQ==}
     peerDependencies:
-      '@mastra/core': ^0.9.4-alpha.2
+      '@mastra/core': ^0.9.4-alpha.3
       zod: ^3.0.0
 
   '@mastra/store-upstash@0.0.5':
@@ -4565,51 +4568,51 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
-  '@typescript-eslint/eslint-plugin@8.32.0':
-    resolution: {integrity: sha512-/jU9ettcntkBFmWUzzGgsClEi2ZFiikMX5eEQsmxIAWMOn4H3D4rvHssstmAHGVvrYnaMqdWWWg0b5M6IN/MTQ==}
+  '@typescript-eslint/eslint-plugin@8.32.1':
+    resolution: {integrity: sha512-6u6Plg9nP/J1GRpe/vcjjabo6Uc5YQPAMxsgQyGC/I0RuukiG1wIe3+Vtg3IrSCVJDmqK3j8adrtzXSENRtFgg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       '@typescript-eslint/parser': ^8.0.0 || ^8.0.0-alpha.0
       eslint: ^8.57.0 || ^9.0.0
       typescript: '>=4.8.4 <5.9.0'
 
-  '@typescript-eslint/parser@8.32.0':
-    resolution: {integrity: sha512-B2MdzyWxCE2+SqiZHAjPphft+/2x2FlO9YBx7eKE1BCb+rqBlQdhtAEhzIEdozHd55DXPmxBdpMygFJjfjjA9A==}
+  '@typescript-eslint/parser@8.32.1':
+    resolution: {integrity: sha512-LKMrmwCPoLhM45Z00O1ulb6jwyVr2kr3XJp+G+tSEZcbauNnScewcQwtJqXDhXeYPDEjZ8C1SjXm015CirEmGg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: ^8.57.0 || ^9.0.0
       typescript: '>=4.8.4 <5.9.0'
 
-  '@typescript-eslint/scope-manager@8.32.0':
-    resolution: {integrity: sha512-jc/4IxGNedXkmG4mx4nJTILb6TMjL66D41vyeaPWvDUmeYQzF3lKtN15WsAeTr65ce4mPxwopPSo1yUUAWw0hQ==}
+  '@typescript-eslint/scope-manager@8.32.1':
+    resolution: {integrity: sha512-7IsIaIDeZn7kffk7qXC3o6Z4UblZJKV3UBpkvRNpr5NSyLji7tvTcvmnMNYuYLyh26mN8W723xpo3i4MlD33vA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@typescript-eslint/type-utils@8.32.0':
-    resolution: {integrity: sha512-t2vouuYQKEKSLtJaa5bB4jHeha2HJczQ6E5IXPDPgIty9EqcJxpr1QHQ86YyIPwDwxvUmLfP2YADQ5ZY4qddZg==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-    peerDependencies:
-      eslint: ^8.57.0 || ^9.0.0
-      typescript: '>=4.8.4 <5.9.0'
-
-  '@typescript-eslint/types@8.32.0':
-    resolution: {integrity: sha512-O5Id6tGadAZEMThM6L9HmVf5hQUXNSxLVKeGJYWNhhVseps/0LddMkp7//VDkzwJ69lPL0UmZdcZwggj9akJaA==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-
-  '@typescript-eslint/typescript-estree@8.32.0':
-    resolution: {integrity: sha512-pU9VD7anSCOIoBFnhTGfOzlVFQIA1XXiQpH/CezqOBaDppRwTglJzCC6fUQGpfwey4T183NKhF1/mfatYmjRqQ==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-    peerDependencies:
-      typescript: '>=4.8.4 <5.9.0'
-
-  '@typescript-eslint/utils@8.32.0':
-    resolution: {integrity: sha512-8S9hXau6nQ/sYVtC3D6ISIDoJzS1NsCK+gluVhLN2YkBPX+/1wkwyUiDKnxRh15579WoOIyVWnoyIf3yGI9REw==}
+  '@typescript-eslint/type-utils@8.32.1':
+    resolution: {integrity: sha512-mv9YpQGA8iIsl5KyUPi+FGLm7+bA4fgXaeRcFKRDRwDMu4iwrSHeDPipwueNXhdIIZltwCJv+NkxftECbIZWfA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: ^8.57.0 || ^9.0.0
       typescript: '>=4.8.4 <5.9.0'
 
-  '@typescript-eslint/visitor-keys@8.32.0':
-    resolution: {integrity: sha512-1rYQTCLFFzOI5Nl0c8LUpJT8HxpwVRn9E4CkMsYfuN6ctmQqExjSTzzSk0Tz2apmXy7WU6/6fyaZVVA/thPN+w==}
+  '@typescript-eslint/types@8.32.1':
+    resolution: {integrity: sha512-YmybwXUJcgGqgAp6bEsgpPXEg6dcCyPyCSr0CAAueacR/CCBi25G3V8gGQ2kRzQRBNol7VQknxMs9HvVa9Rvfg==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@typescript-eslint/typescript-estree@8.32.1':
+    resolution: {integrity: sha512-Y3AP9EIfYwBb4kWGb+simvPaqQoT5oJuzzj9m0i6FCY6SPvlomY2Ei4UEMm7+FXtlNJbor80ximyslzaQF6xhg==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    peerDependencies:
+      typescript: '>=4.8.4 <5.9.0'
+
+  '@typescript-eslint/utils@8.32.1':
+    resolution: {integrity: sha512-DsSFNIgLSrc89gpq1LJB7Hm1YpuhK086DRDJSNrewcGvYloWW1vZLHBTIvarKZDcAORIy/uWNx8Gad+4oMpkSA==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    peerDependencies:
+      eslint: ^8.57.0 || ^9.0.0
+      typescript: '>=4.8.4 <5.9.0'
+
+  '@typescript-eslint/visitor-keys@8.32.1':
+    resolution: {integrity: sha512-ar0tjQfObzhSaW3C3QNmTc5ofj0hDoNQ5XWrCy6zDyabdr0TWhCkClp+rywGNj/odAFBVzzJrK4tEq5M4Hmu4w==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@typescript/vfs@1.6.1':
@@ -6327,6 +6330,10 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
+  ignore@7.0.4:
+    resolution: {integrity: sha512-gJzzk+PQNznz8ysRrC0aOkBNVRBDtE1n53IqyqEf3PXrYwomFs5q4pGMizBMJF+ykh03insJ27hB8gSrD2Hn8A==}
+    engines: {node: '>= 4'}
+
   immediate@3.0.6:
     resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
 
@@ -6829,8 +6836,8 @@ packages:
     engines: {node: '>= 18'}
     hasBin: true
 
-  mastra@0.6.3-alpha.2:
-    resolution: {integrity: sha512-D9P3mh03npjd+aMJh9qa5HvxUQk5NzaJVkp0qoj0sCytqHxbHKEvVqgbUmv5gZwNoixAga3oGWPHAlb1XSFyoQ==}
+  mastra@0.6.3-alpha.4:
+    resolution: {integrity: sha512-A0UXbp2PH6MDYX394W6WmMhYD80qIWn+8/w6nlsRJzktwQwB+/AzbYuoZ9WxsF+IsQ0GPNc20C9N/gMph3T2lg==}
     hasBin: true
 
   matcher@3.0.0:
@@ -7336,11 +7343,6 @@ packages:
 
   pg-pool@3.10.0:
     resolution: {integrity: sha512-DzZ26On4sQ0KmqnO34muPcmKbhrjmyiO4lCCR0VwEd7MjmiKf5NTg/6+apUEu0NF7ESa37CGzFxH513CoUmWnA==}
-    peerDependencies:
-      pg: '>=8.0'
-
-  pg-pool@3.9.6:
-    resolution: {integrity: sha512-rFen0G7adh1YmgvrmE5IPIqbb+IgEzENUm+tzm6MLLDSlPRoZVhzU1WdML9PV2W5GOdRA9qBKURlbt1OsXOsPw==}
     peerDependencies:
       pg: '>=8.0'
 
@@ -8027,6 +8029,10 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
+  strip-json-comments@5.0.1:
+    resolution: {integrity: sha512-0fk9zBqO67Nq5M/m45qHCJxylV/DhBlIOVExqgOMiCCrzrhU6tCibRXNqE3jwJLftzE9SNuZtYbpzcO+i9FiKw==}
+    engines: {node: '>=14.16'}
+
   strnum@1.1.2:
     resolution: {integrity: sha512-vrN+B7DBIoTTZjnPNewwhx6cBA/H+IS7rfW68n7XxC1y7uoiGQBxaKzqucGUgavX15dJgiGztLJ8vxuEzwqBdA==}
 
@@ -8272,8 +8278,8 @@ packages:
     resolution: {integrity: sha512-EGjWssW7Tsk4DGfE+5yluuljS1OGYWiI1J6e8puZz9nTMM51Oug8CD5Zo4gWMsOhq5BI+1bF+rWTm4Vbj3ivRA==}
     engines: {node: '>= 18'}
 
-  typescript-eslint@8.32.0:
-    resolution: {integrity: sha512-UMq2kxdXCzinFFPsXc9o2ozIpYCCOiEC46MG3yEh5Vipq6BO27otTtEBZA1fQ66DulEUgE97ucQ/3YY66CPg0A==}
+  typescript-eslint@8.32.1:
+    resolution: {integrity: sha512-D7el+eaDHAmXvrZBy1zpzSNIRqnCOrkwTgZxTu3MUqRWk8k0q9m9Ho4+vPf7iHtgUfrK/o8IZaEApsxPlHTFCg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: ^8.57.0 || ^9.0.0
@@ -8625,6 +8631,9 @@ packages:
   yoctocolors@2.1.1:
     resolution: {integrity: sha512-GQHQqAopRhwU8Kt1DDM8NjibDXHC8eoh1erhGAJPEyveY9qqVeXvVikNKrDz69sHowPMorbPUrH/mx8c50eiBQ==}
     engines: {node: '>=18'}
+
+  zod-from-json-schema@0.0.5:
+    resolution: {integrity: sha512-zYEoo86M1qpA1Pq6329oSyHLS785z/mTwfr9V1Xf/ZLhuuBGaMlDGu/pDVGVUe4H4oa1EFgWZT53DP0U3oT9CQ==}
 
   zod-to-json-schema@3.24.5:
     resolution: {integrity: sha512-/AuWwMP+YqiPbsJx5D6TfgRTc4kTLjsh5SOcd4bLsfUg2RcEXrFMJl1DGgdHy2aCfsIA/cr/1JM0xcB2GZji8g==}
@@ -10321,7 +10330,7 @@ snapshots:
       '@langchain/core': 0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))
       react: 19.1.0
 
-  '@langchain/langgraph@0.2.71(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(react@19.1.0)(zod-to-json-schema@3.24.5(zod@3.24.4))':
+  '@langchain/langgraph@0.2.72(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))(react@19.1.0)(zod-to-json-schema@3.24.5(zod@3.24.4))':
     dependencies:
       '@langchain/core': 0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4))
       '@langchain/langgraph-checkpoint': 0.0.17(@langchain/core@0.3.55(openai@4.98.0(ws@8.18.2)(zod@3.24.4)))
@@ -10549,7 +10558,7 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
+  '@mastra/core@0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
     dependencies:
       '@libsql/client': 0.14.0
       '@opentelemetry/api': 1.9.0
@@ -10580,6 +10589,7 @@ snapshots:
       sift: 17.1.3
       xstate: 5.19.2
       zod: 3.24.4
+      zod-from-json-schema: 0.0.5
       zod-to-json-schema: 3.24.5(zod@3.24.4)
     transitivePeerDependencies:
       - '@hono/arktype-validator'
@@ -10601,12 +10611,12 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/deployer@0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)':
+  '@mastra/deployer@0.3.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)':
     dependencies:
       '@babel/core': 7.27.1
       '@babel/helper-module-imports': 7.27.1
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
-      '@mastra/server': 2.0.4-alpha.2(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/server': 2.0.4-alpha.3(@mastra/core@0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)
       '@neon-rs/load': 0.1.82
       '@rollup/plugin-alias': 5.1.1(rollup@4.40.2)
       '@rollup/plugin-commonjs': 28.0.3(rollup@4.40.2)
@@ -10733,10 +10743,10 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/libsql@0.0.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
+  '@mastra/libsql@0.0.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)':
     dependencies:
       '@libsql/client': 0.15.5
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
     transitivePeerDependencies:
       - '@hono/arktype-validator'
       - '@hono/effect-validator'
@@ -10811,14 +10821,14 @@ snapshots:
       - zod
       - zod-openapi
 
-  '@mastra/memory@0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)':
+  '@mastra/memory@0.3.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       '@upstash/redis': 1.34.9
       ai: 4.3.15(react@19.1.0)(zod@3.24.4)
       js-tiktoken: 1.0.20
       pg: 8.16.0
-      pg-pool: 3.9.6(pg@8.16.0)
+      pg-pool: 3.10.0(pg@8.16.0)
       postgres: 3.4.5
       redis: 4.7.1
       xxhash-wasm: 1.1.0
@@ -10873,13 +10883,13 @@ snapshots:
       - valibot
       - zod-openapi
 
-  '@mastra/server@2.0.3(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))':
+  '@mastra/server@2.0.3(@mastra/core@0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
 
-  '@mastra/server@2.0.4-alpha.2(@mastra/core@0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)':
+  '@mastra/server@2.0.4-alpha.3(@mastra/core@0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4))(zod@3.24.4)':
     dependencies:
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
       zod: 3.24.4
 
   '@mastra/store-upstash@0.0.5(react@19.1.0)':
@@ -14187,44 +14197,44 @@ snapshots:
     dependencies:
       '@types/node': 22.15.17
 
-  '@typescript-eslint/eslint-plugin@8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
+  '@typescript-eslint/eslint-plugin@8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.1
-      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      '@typescript-eslint/scope-manager': 8.32.0
-      '@typescript-eslint/type-utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      '@typescript-eslint/visitor-keys': 8.32.0
+      '@typescript-eslint/parser': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/scope-manager': 8.32.1
+      '@typescript-eslint/type-utils': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/visitor-keys': 8.32.1
       eslint: 9.26.0(jiti@2.4.2)
       graphemer: 1.4.0
-      ignore: 5.3.2
+      ignore: 7.0.4
       natural-compare: 1.4.0
       ts-api-utils: 2.1.0(typescript@5.8.3)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
+  '@typescript-eslint/parser@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
-      '@typescript-eslint/scope-manager': 8.32.0
-      '@typescript-eslint/types': 8.32.0
-      '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
-      '@typescript-eslint/visitor-keys': 8.32.0
+      '@typescript-eslint/scope-manager': 8.32.1
+      '@typescript-eslint/types': 8.32.1
+      '@typescript-eslint/typescript-estree': 8.32.1(typescript@5.8.3)
+      '@typescript-eslint/visitor-keys': 8.32.1
       debug: 4.4.0(supports-color@8.1.1)
       eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/scope-manager@8.32.0':
+  '@typescript-eslint/scope-manager@8.32.1':
     dependencies:
-      '@typescript-eslint/types': 8.32.0
-      '@typescript-eslint/visitor-keys': 8.32.0
+      '@typescript-eslint/types': 8.32.1
+      '@typescript-eslint/visitor-keys': 8.32.1
 
-  '@typescript-eslint/type-utils@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
+  '@typescript-eslint/type-utils@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
-      '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/typescript-estree': 8.32.1(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       debug: 4.4.0(supports-color@8.1.1)
       eslint: 9.26.0(jiti@2.4.2)
       ts-api-utils: 2.1.0(typescript@5.8.3)
@@ -14232,12 +14242,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/types@8.32.0': {}
+  '@typescript-eslint/types@8.32.1': {}
 
-  '@typescript-eslint/typescript-estree@8.32.0(typescript@5.8.3)':
+  '@typescript-eslint/typescript-estree@8.32.1(typescript@5.8.3)':
     dependencies:
-      '@typescript-eslint/types': 8.32.0
-      '@typescript-eslint/visitor-keys': 8.32.0
+      '@typescript-eslint/types': 8.32.1
+      '@typescript-eslint/visitor-keys': 8.32.1
       debug: 4.4.0(supports-color@8.1.1)
       fast-glob: 3.3.3
       is-glob: 4.0.3
@@ -14248,20 +14258,20 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
+  '@typescript-eslint/utils@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)':
     dependencies:
       '@eslint-community/eslint-utils': 4.7.0(eslint@9.26.0(jiti@2.4.2))
-      '@typescript-eslint/scope-manager': 8.32.0
-      '@typescript-eslint/types': 8.32.0
-      '@typescript-eslint/typescript-estree': 8.32.0(typescript@5.8.3)
+      '@typescript-eslint/scope-manager': 8.32.1
+      '@typescript-eslint/types': 8.32.1
+      '@typescript-eslint/typescript-estree': 8.32.1(typescript@5.8.3)
       eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/visitor-keys@8.32.0':
+  '@typescript-eslint/visitor-keys@8.32.1':
     dependencies:
-      '@typescript-eslint/types': 8.32.0
+      '@typescript-eslint/types': 8.32.1
       eslint-visitor-keys: 4.2.0
 
   '@typescript/vfs@1.6.1(typescript@5.8.3)':
@@ -16157,6 +16167,8 @@ snapshots:
 
   ignore@5.3.2: {}
 
+  ignore@7.0.4: {}
+
   immediate@3.0.6: {}
 
   import-fresh@3.3.1:
@@ -16644,12 +16656,12 @@ snapshots:
 
   marked@15.0.11: {}
 
-  mastra@0.6.3-alpha.2(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3):
+  mastra@0.6.3-alpha.4(@opentelemetry/api@1.9.0)(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3):
     dependencies:
       '@clack/prompts': 0.8.2
       '@lukeed/uuid': 2.0.1
-      '@mastra/core': 0.9.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
-      '@mastra/deployer': 0.3.4-alpha.2(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
+      '@mastra/core': 0.9.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(zod@3.24.4)
+      '@mastra/deployer': 0.3.4-alpha.3(openapi-types@12.1.3)(react@19.1.0)(typescript@5.8.3)
       '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.0)
       '@webcontainer/env': 1.1.1
       commander: 12.1.0
@@ -16662,6 +16674,7 @@ snapshots:
       prettier: 3.5.3
       prompt: 1.3.0
       shiki: 1.29.2
+      strip-json-comments: 5.0.1
       superjson: 2.2.2
       swr: 2.3.3(react@19.1.0)
       tcp-port-used: 1.0.2
@@ -17181,10 +17194,6 @@ snapshots:
   pg-numeric@1.0.2: {}
 
   pg-pool@3.10.0(pg@8.16.0):
-    dependencies:
-      pg: 8.16.0
-
-  pg-pool@3.9.6(pg@8.16.0):
     dependencies:
       pg: 8.16.0
 
@@ -17973,6 +17982,8 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
+  strip-json-comments@5.0.1: {}
+
   strnum@1.1.2: {}
 
   strnum@2.1.0: {}
@@ -18252,11 +18263,11 @@ snapshots:
 
   typed-function@4.2.1: {}
 
-  typescript-eslint@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3):
+  typescript-eslint@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.32.0(@typescript-eslint/parser@8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      '@typescript-eslint/parser': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
-      '@typescript-eslint/utils': 8.32.0(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/eslint-plugin': 8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3))(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/parser': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
+      '@typescript-eslint/utils': 8.32.1(eslint@9.26.0(jiti@2.4.2))(typescript@5.8.3)
       eslint: 9.26.0(jiti@2.4.2)
       typescript: 5.8.3
     transitivePeerDependencies:
@@ -18548,6 +18559,10 @@ snapshots:
   yoctocolors-cjs@2.1.2: {}
 
   yoctocolors@2.1.1: {}
+
+  zod-from-json-schema@0.0.5:
+    dependencies:
+      zod: 3.24.4
 
   zod-to-json-schema@3.24.5(zod@3.24.4):
     dependencies:

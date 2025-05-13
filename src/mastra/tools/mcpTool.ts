@@ -20,45 +20,62 @@ const logger = createLogger({
 });
 
 const mcpToolInputSchema = z.object({
-  serverUrl: z.string().url().describe("URL of the MCP server"),
+  serverUrl: z.string().url().optional().describe("URL of the MCP server. If not provided, MCP_SERVER_URL environment variable will be used."),
   toolName: z.string().describe("Name of the tool to use on the MCP server (non-namespaced)"),
   toolInput: z.any().describe("Input for the specified tool"),
 });
 
 const mcpToolOutputSchema = z.any().describe("The result returned by the remote MCP tool.");
 
-const mcpToolConfigSchema = z.object({
-  verbose: z.boolean().optional().describe("Enable verbose logging for the MCP client and server communication."),
-  serverRequestInit: z.any().optional().describe("RequestInit object for the MCP server connection (e.g., for headers). Passed to the server definition."),
-  serverTimeout: z.number().int().positive().optional().describe("Timeout in milliseconds for the specific MCP server communication."),
-  clientTimeout: z.number().int().positive().optional().describe("Global timeout in milliseconds for the MCPClient instance itself.")
-}).optional();
 
 export const mcpTool = createTool({
   id: "mcpTool",
   description: "Interacts with MCP servers to use external tools.",
   inputSchema: mcpToolInputSchema,
   outputSchema: mcpToolOutputSchema,
-  configSchema: mcpToolConfigSchema,
 
   async execute(
-    context: ToolExecutionContext<
-      typeof mcpToolInputSchema,
-      typeof mcpToolOutputSchema,
-      typeof mcpToolConfigSchema
-    >
+    context // Type is inferred by createTool
   ): Promise<z.infer<typeof mcpToolOutputSchema>> {
-    const { input, config, runtime } = context;
+    const { input, runtime } = context;
     const { logger, toolCallId, abortSignal } = runtime;
     
-    logger.info('Executing MCP tool', { input, config, toolCallId });
+    logger.info('Executing MCP tool', { input: { ...input, serverUrl: input.serverUrl || 'MCP_SERVER_URL (if set)' }, config, toolCallId });
 
+    let finalServerUrl: string;
+
+    const envServerUrl = process.env.MCP_SERVER_URL;
+
+    if (envServerUrl && envServerUrl.trim() !== "") {
+      finalServerUrl = envServerUrl.trim();
+      logger.info(`Using MCP_SERVER_URL from environment: ${finalServerUrl}`);
+      if (input.serverUrl && input.serverUrl.trim() !== "" && input.serverUrl.trim() !== finalServerUrl) {
+        logger.warn(`MCP_SERVER_URL from environment ('${finalServerUrl}') overrides provided input serverUrl ('${input.serverUrl.trim()}').`);
+      }
+    } else if (input.serverUrl && input.serverUrl.trim() !== "") {
+      finalServerUrl = input.serverUrl.trim();
+      logger.info(`Using serverUrl from input: ${finalServerUrl}`);
+    } else {
+      const errorMessage = 'MCP server URL is not defined. Provide it via input.serverUrl or set a non-empty MCP_SERVER_URL environment variable.';
+      logger.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    // Validate the determined URL
+    try {
+      new URL(finalServerUrl);
+    } catch (e) {
+      const validationError = `Invalid MCP server URL determined: '${finalServerUrl}'. Error: ${e instanceof Error ? e.message : String(e)}`;
+      logger.error(validationError);
+      throw new Error(validationError);
+    }
+    
     const serverKey = "dynamicMcpServer";
 
     const mcpClientOptions: ConstructorParameters<typeof MCPClient>[0] = {
       servers: {
         [serverKey]: {
-          url: new URL(input.serverUrl),
+          url: new URL(finalServerUrl),
           requestInit: config?.serverRequestInit,
           timeout: config?.serverTimeout,
           enableServerLogs: config?.verbose,
@@ -85,7 +102,7 @@ export const mcpTool = createTool({
     const mcpClient = new MCPClient(mcpClientOptions);
 
     try {
-      logger.debug(`Attempting to fetch tools from MCP server: ${input.serverUrl}`);
+      logger.debug(`Attempting to fetch tools from MCP server: ${finalServerUrl}`);
       
       const toolsets = await mcpClient.getToolsets();
       const namespacedToolName = `${serverKey}.${input.toolName}`;
@@ -93,8 +110,8 @@ export const mcpTool = createTool({
 
       if (!remoteTool) {
         const availableTools = Object.keys(toolsets).join(", ") || "No tools found";
-        logger.error(`Tool '${input.toolName}' (namespaced: '${namespacedToolName}') not found on MCP server '${input.serverUrl}'. Available tools: [${availableTools}]`);
-        throw new Error(`Tool '${input.toolName}' not found on MCP server '${input.serverUrl}'. Available: [${availableTools}]`);
+        logger.error(`Tool '${input.toolName}' (namespaced: '${namespacedToolName}') not found on MCP server '${finalServerUrl}'. Available tools: [${availableTools}]`);
+        throw new Error(`Tool '${input.toolName}' not found on MCP server '${finalServerUrl}'. Available: [${availableTools}]`);
       }
 
       logger.debug(`Found remote tool '${namespacedToolName}'. Executing with input:`, input.toolInput);
@@ -116,12 +133,12 @@ export const mcpTool = createTool({
       logger.error('Error executing MCP tool', {
         error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : error,
         toolName: input.toolName,
-        serverUrl: input.serverUrl,
+        serverUrl: finalServerUrl,
       });
       if (error instanceof Error) {
-        throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${input.serverUrl}': ${error.message}`, { cause: error });
+        throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${finalServerUrl}': ${error.message}`, { cause: error });
       }
-      throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${input.serverUrl}': ${errorMessage}`);
+      throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${finalServerUrl}': ${errorMessage}`);
     } finally {
       logger.debug('Disconnecting MCPClient...');
       await mcpClient.disconnect();

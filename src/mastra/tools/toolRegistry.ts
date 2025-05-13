@@ -15,6 +15,7 @@ import { tavilyTools } from './tavilySearch';
 import { slackTools } from './slackTool';
 import { telegramTools } from './telegramTool';
 import { vercelTools } from './vercelTool';
+import { langGraphGoogleGenaiTool } from './langGraphTool'; // Added new import
 
 // Placeholder configuration for GraphRAG tools
 // In a real application, this would come from a config file or environment variables.
@@ -53,6 +54,7 @@ export const toolRegistry = {
   slackTools,
   telegramTools,
   vercelTools,
+  langGraphGoogleGenaiTool, // Added new langGraphGoogleGenaiTool
   // Add other tools here as they are created
 };
 
