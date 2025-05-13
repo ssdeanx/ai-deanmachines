@@ -11,7 +11,6 @@ import { CoreMessage } from 'ai';
  * Semantic recall configuration schema
  */
 export const SemanticRecallConfigSchema = z.object({
-  enabled: z.boolean().default(true),
   type: z.enum(["text-stream"]).optional(),
   topK: z.number().min(1).default(5),
   messageRange: z.object({
@@ -33,7 +32,6 @@ export const WorkingMemoryConfigSchema = z.object({
   enabled: z.boolean().default(true),
   type: z.enum(["text-stream"]).optional(),
   template: z.string().optional(),
-  updateFrequency: z.number().min(1).default(5),
 });
 
 /**

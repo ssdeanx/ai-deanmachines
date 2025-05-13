@@ -13,6 +13,26 @@ import { MemoryConfig, EnhancedMemoryConfig, ThreadInfo } from './types';
 import { getTracer } from '../observability/telemetry';
 import { getLangfuseClient, trackSpan as langfuseTrackSpan, MastraSpanOptions } from '../observability/langfuse';
 import { Span as OpenTelemetrySpan, SpanStatusCode } from '@opentelemetry/api';
+import { 
+  TokenLimiter,
+  ToolCallFilter,
+  ContextualSummarizer,
+  PriorityRanker,
+  DuplicateDetector,
+  TemporalProcessor,
+  EntityExtractor,
+  SentimentAnalyzer,
+  ContextualEnhancer,
+  CommonEnhancements,
+  MessageTransformer,
+  CommonTransforms,
+  StreamFilter,
+  CommonFilters,
+  StreamObjectProcessor,
+  CommonStreamTransforms,
+  StreamAggregator,
+  CommonGroupings 
+} from './processors';
 
 const logger = createLogger({ name: 'database', level: 'info' });
 
@@ -31,22 +51,22 @@ const defaultMemoryConfig: EnhancedMemoryConfig = {
     enabled: true,
     type: "text-stream",
   },
-  threads: {
-    generateTitle: true,
-  },
+  options: {
+    threads: {
+      generateTitle: true,
+    }
+  }
 };
-
 // Enable lazy loading for Langfuse
 async function getLangfuse() {
   try {
-    const { langfuse } = await import("../observability/langfuse.js");
-    return langfuse;
+    const { getLangfuseClient } = await import("../observability/langfuse");
+    return getLangfuseClient;
   } catch (error) {
     logger.warn("Failed to load Langfuse", { error: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
-
 // Create LibSQL storage and vector instances with optimized configuration
 export const storage = new LibSQLStore({
   url: process.env.DATABASE_URL || 'file:.mastra/mastra.db',
@@ -83,14 +103,13 @@ export async function createMemory(options: Partial<MemoryConfig> = defaultMemor
       span.end();
       return memoryInstance;
     } catch (error) {
-      logger.error({ err: error, operation: operationName }, `Error during ${operationName}`);
+      logger.error(`Error during ${operationName}: ${error instanceof Error ? error.message : String(error)}`);
       span.recordException(error as Error);
       span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
       span.end();
       throw error;
     }
-  });
-}
+  });}
 
 // Export shared memory instance with high token limit support
 export const sharedMemory = new Memory({
@@ -102,7 +121,7 @@ export const sharedMemory = new Memory({
 
 // Ensure threadManager initializes only after sharedMemory is ready
 export const initThreadManager = (async () => {
-  const span = createTracedSpan('threadManager.init');
+  const span = createTracedSpan('threadManager.init', 'memory-module');
   
   try {
     if ('init' in sharedMemory && typeof sharedMemory.init === 'function') {
@@ -116,13 +135,15 @@ export const initThreadManager = (async () => {
     } catch (err) {
       logger.error('Failed to create default thread in threadManager:', { error: err instanceof Error ? err.message : String(err) });
     }
-    const langfuse = await getLangfuse();
-    langfuse?.createTrace?.('initThreadManager', {
-      metadata: {
-        ...(defaultThread?.usage_details ? { usage_details: defaultThread.usage_details } : {}),
-        ...(defaultThread?.cost_details ? { cost_details: defaultThread.cost_details } : {})
-      }
-    });
+    const langfuseInstance = (await getLangfuse());
+    if (langfuseInstance) {
+      langfuseInstance.trace('initThreadManager', {
+        metadata: {
+          ...(defaultThread?.usage_details ? { usage_details: defaultThread.usage_details } : {}),
+          ...(defaultThread?.cost_details ? { cost_details: defaultThread.cost_details } : {})
+        }
+      });
+    }
     span?.end();
     return threadManager;
   } catch (error) {
@@ -130,20 +151,9 @@ export const initThreadManager = (async () => {
     span?.end();
     throw error;
   }
-})();
 
-// Re-export Memory type for convenience
-export type { Memory };
+})();export type { Memory };
 export type { ThreadManager, ThreadInfo };
-
-// Export memory processors for use in other modules
-export {
-  HighVolumeContextProcessor,
-  TokenLimiter,
-  ToolCallFilter,
-  SemanticEmbeddingProcessor,
-  SemanticClusteringProcessor
-};
 
 /**
  * Creates a configured Memory instance with advanced processor options
@@ -173,14 +183,13 @@ export async function createAdvancedMemory(options: Partial<EnhancedMemoryConfig
       span.end();
       return memoryInstance;
     } catch (error) {
-      logger.error({ err: error, operation: operationName }, `Error during ${operationName}`);
+      logger.error(`Error during ${operationName}`, { err: error, operation: operationName });
       span.recordException(error as Error);
       span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
       span.end();
       throw error;
     }
-  });
-}
+  });}
 
 /**
  * Creates a chain of memory processors optimized for handling large context windows up to 1M tokens
@@ -220,21 +229,21 @@ export function withErrorHandling<T>(
   span?: OpenTelemetrySpan,
   throwError: boolean = true
 ) {
-  return async function<A extends any[], R>(fn: (...args: A) => Promise<R>): Promise<R> {
+  return async function<A extends any[], R>(fn: (...args: A) => Promise<R>, ...args: A): Promise<R> {
     try {
-      const result = await fn();
+      const result = await fn(...args);
       span?.setStatus({ code: SpanStatusCode.OK });
       return result;
     } catch (error) {
-      logger.error({ err: error, operation }, `Error during ${operation}`);
+      logger.error(`Error during ${operation}`, { err: error, operation });
       span?.recordException(error as Error);
       span?.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
       if (throwError) {
         throw error;
       }
       return undefined as unknown as R;
-    } finally {
-      span?.end();
-    }
-  };
-}
+      } finally {
+        span?.end();
+      }
+    };
+  }
