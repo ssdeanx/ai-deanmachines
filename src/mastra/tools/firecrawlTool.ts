@@ -1,61 +1,59 @@
 // Mastra Firecrawl Tool
 import { createTool } from "@mastra/core/tools"; 
-import { z } from 'zod';
-import { createLogger } from '@mastra/core/logger';
-import { FirecrawlApp, type CrawlOptions as FirecrawlSdkCrawlOptions, type ScrapeOptions as FirecrawlSdkScrapeOptions } from '@firecrawl/sdk'; // Standard Firecrawl SDK import
-import type { AbortSignal } from 'node-abort-controller'; // Or global if available
+import { z } from "zod";
+import { createLogger } from "@mastra/core/logger";
+import { FirecrawlApp, type CrawlOptions as FirecrawlSdkCrawlOptions, type ScrapeOptions as FirecrawlSdkScrapeOptions } from '@firecrawl/sdk'; 
 
 const logger = createLogger({ name: "Mastra-FirecrawlTool" });
 
 const firecrawlToolInputSchema = z.object({
-  operation: z.enum(['scrape', 'crawl']).describe("Operation to perform: 'scrape' a single URL or 'crawl' a website."),
-  url: z.string().url().describe("URL of the web page to scrape or start crawling from."),
-  params: z.object({
-    crawlerOptions: z.object({
-      excludes: z.array(z.string()).optional().describe("Array of regex patterns to exclude URLs from crawling."),
-      includes: z.array(z.string()).optional().describe("Array of regex patterns to include URLs for crawling."),
-      maxDepth: z.number().int().positive().optional().describe("Maximum depth to crawl."),
-      limit: z.number().int().positive().optional().describe("Maximum number of pages to crawl."),
-      generateImgAltText: z.boolean().optional().describe("Whether to generate alt text for images."),
-      returnOnlyUrls: z.boolean().optional().describe("Whether to return only URLs instead of page content."),
-      pageOptions: z.object({
-        onlyMainContent: z.boolean().optional().describe("Whether to return only the main content of the page.")
-      }).optional()
-    }).optional().describe("Options for the 'crawl' operation."),
-    pageOptions: z.object({
-      onlyMainContent: z.boolean().optional().describe("Whether to return only the main content of the page, excluding headers, footers, etc. For 'scrape' operation.")
-    }).optional().describe("Options for the 'scrape' operation."),
-  }).optional().describe("Parameters for the chosen operation.")
+  url: z.string().url().describe("URL of the web page to crawl or scrape"),
+  operation: z.enum(["crawl", "scrape"]).default("scrape").describe("Whether to crawl the website or scrape a single URL. Defaults to scrape."),
+  crawlerOptions: z.object({ 
+    excludes: z.array(z.string()).optional().describe("Array of regex patterns to exclude URLs from crawling."),
+    includes: z.array(z.string()).optional().describe("Array of regex patterns to include URLs for crawling. If specified, only matching URLs will be crawled."),
+    maxDepth: z.number().int().positive().optional().describe("Maximum depth to crawl for 'crawl' operation."),
+    limit: z.number().int().positive().optional().describe("Maximum number of pages to crawl for 'crawl' operation."),
+    generateImgAltText: z.boolean().optional().describe("Whether to generate alt text for images."),
+    returnOnlyUrls: z.boolean().optional().describe("Whether to return only URLs instead of page content for 'crawl' operation."),
+  }).optional().describe("Options specific to the 'crawl' operation's crawlerOptions."),
+  pageOptions: z.object({ 
+    onlyMainContent: z.boolean().optional().describe("Whether to return only the main content of the page, excluding headers, footers, etc. for 'scrape' operation (and also for crawl if not returning only URLs)."),
+  }).optional().describe("Options specific to the 'scrape' operation's pageOptions, or for crawled pages if content is returned.")
 });
 
 const firecrawlToolOutputSchema = z.object({
   success: z.boolean(),
-  data: z.any().optional().describe("Scraped or crawled data. Structure depends on Firecrawl API response."),
+  data: z.any().optional().describe("Crawled or scraped data. Structure depends on Firecrawl API response."),
   message: z.string().optional().describe("Optional message, e.g., in case of error or partial success.")
 });
 
 export const firecrawlTool = createTool({
-  id: "firecrawl-web-operations", // Renamed ID for clarity
-  description: "Scrapes content from a single URL or crawls a website using Firecrawl service.",
+  id: "firecrawl-web-scraper",
+  description: "Crawls or scrapes a web page using Firecrawl service to extract its content or sitemap.",
   inputSchema: firecrawlToolInputSchema,
   outputSchema: firecrawlToolOutputSchema,
   execute: async ({
-    context,
+    context, 
     runtimeContext,
     abortSignal,
   }: {
+    context: z.infer<typeof firecrawlToolInputSchema>;
     runtimeContext?: Record<string, any>;
-    abortSignal?: AbortSignal;
+    abortSignal?: AbortSignal; 
   }) => {
-    const { operation, url, params } = context;
+    const { url, operation, crawlerOptions: inputCrawlerOptions, pageOptions: inputPageOptions } = context; 
 
-    logger.info(`Executing Firecrawl tool: operation '${operation}' for url: ${url}`, { params });
+    logger.info(`Executing Firecrawl tool for url: ${url}, operation: ${operation}`, {
+      inputCrawlerOptions,
+      inputPageOptions,
+    });
 
     try {
       const apiKey = runtimeContext?.firecrawlApiKey || process.env.FIRECRAWL_API_KEY;
       if (!apiKey) {
-        logger.error("Firecrawl API key is not provided in runtimeContext or environment variables.");
-        return { success: false, message: "Firecrawl API key is missing." };
+        logger.error("Firecrawl API key not found in runtimeContext or environment variables.");
+        return { success: false, message: "Firecrawl API key not configured." };
       }
       
       const firecrawl = new FirecrawlApp({ apiKey });
@@ -67,33 +65,46 @@ export const firecrawlTool = createTool({
 
       let response;
 
-      if (operation === 'scrape') {
-        logger.debug(`Performing scrape operation with options:`, params?.pageOptions);
-        const scrapeParams = { ...params?.pageOptions };
-        response = await firecrawl.scrape(url, scrapeParams, { signal: abortSignal });
-      } else if (operation === 'crawl') {
-        logger.debug(`Performing crawl operation with options:`, params?.crawlerOptions);
-        const crawlParams = { ...params?.crawlerOptions };
-        response = await firecrawl.crawl(url, crawlParams, { signal: abortSignal });
-      } else {
-        return { success: false, message: `Unsupported operation: ${operation}` };
+      if (operation === "crawl") {
+        logger.debug("Performing crawl operation", { url, inputCrawlerOptions, inputPageOptions });
+        
+        const sdkCrawlParams: FirecrawlSdkCrawlOptions = {};
+        if (inputCrawlerOptions) {
+          sdkCrawlParams.crawlerOptions = { ...inputCrawlerOptions };
+        }
+        if (inputPageOptions) { 
+            sdkCrawlParams.pageOptions = { ...inputPageOptions };
+        }
+        
+        response = await firecrawl.crawlUrl(url, Object.keys(sdkCrawlParams).length > 0 ? sdkCrawlParams : undefined, { timeout: 300000, signal: abortSignal });
+      } else { 
+        logger.debug("Performing scrape operation", { url, inputPageOptions });
+
+        const sdkScrapeParams: FirecrawlSdkScrapeOptions = {};
+        if (inputPageOptions) {
+          sdkScrapeParams.pageOptions = { ...inputPageOptions };
+        }
+        
+        response = await firecrawl.scrapeUrl(url, Object.keys(sdkScrapeParams).length > 0 ? sdkScrapeParams : undefined, { timeout: 180000, signal: abortSignal });
       }
 
       if (abortSignal?.aborted) {
-        logger.warn("Firecrawl operation aborted during execution.");
+        logger.warn("Firecrawl operation aborted during/after execution attempt.");
         return { success: false, message: "Operation aborted during execution." };
       }
       
-      logger.info(`Firecrawl operation '${operation}' successful for url: ${url}`);
+      logger.info("Firecrawl operation successful.");
       return { success: true, data: response };
 
     } catch (error: any) {
-      logger.error(`Error executing Firecrawl tool (operation: ${operation}, url: ${url}): ${error.message}`, { errorName: error.name, stack: error.stack });
-      if (error.name === 'AbortError' || abortSignal?.aborted) {
+      logger.error(`Error executing Firecrawl tool for url ${url}: ${error.message}`, { errorName: error.name, stack: error.stack });
+      if (error.name === 'AbortError' || abortSignal?.aborted) { 
         return { success: false, message: "Operation aborted by signal." };
       }
-      const errorMessage = error.response?.data?.message || error.message || "An unknown error occurred.";
-      return { success: false, message: errorMessage, data: error.response?.data };
+      if (error && typeof error === 'object' && 'message' in error) {
+        return { success: false, message: `Firecrawl API error: ${error.message}` };
+      }
+      return { success: false, message: "An unknown error occurred during Firecrawl operation." };
     }
   },
 });

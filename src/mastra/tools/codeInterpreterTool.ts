@@ -1,10 +1,7 @@
-import { createTool, ToolExecutionContext } from '@mastra/core/tools';
+import { createTool, ToolExecutionContext as MastraToolExecutionContext } from '@mastra/core';
 import { Sandbox } from '@e2b/code-interpreter';
-// keep this or import as type you cant run this without it
-import  RuntimeContext  from '@e2b/code-interpreter';
-import { createLogger } from '@mastra/core/logger';
+import { createLogger, MastraLogger } from '@mastra/loggers';
 import { z } from 'zod';
-import { ToolExecutionOptions } from 'ai';
 
 const codeInterpreterToolInputSchema = z.object({
   code: z.string().describe('The Python code to execute.'),
@@ -26,62 +23,78 @@ const codeInterpreterToolOutputSchema = z.object({
   result: z.any().optional().describe("The result of the execution, if any. This could be the output of the last expression in the code."),
 });
 
+// Create a logger instance for the CodeInterpreterTool
+const toolLogger = createLogger({
+  name: 'Mastra-CodeInterpreterTool',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+});
+
 export const codeInterpreterTool = createTool({
   name: 'codeInterpreterTool',
   description: 'Executes Python code in a sandboxed environment and returns the output.',
-  inputSchema: codeInterpreterToolInputSchema as any,
-  outputSchema: codeInterpreterToolOutputSchema as any,
+  inputSchema: codeInterpreterToolInputSchema,
+  outputSchema: codeInterpreterToolOutputSchema,
   configSchema: codeInterpreterToolConfigSchema,
-  async execute(context: ToolExecutionContext<typeof codeInterpreterToolInputSchema>, options?: ToolExecutionOptions): Promise<z.infer<typeof codeInterpreterToolOutputSchema>> {
-    const { input, config, runtime } = context as any;
-    const { logger, toolCallId, abortSignal } = runtime;
+  async execute(
+    executionContext: MastraToolExecutionContext<typeof codeInterpreterToolInputSchema, typeof codeInterpreterToolConfigSchema>,
+    executeOptions?: { abortSignal?: AbortSignal; runtime?: { logger?: MastraLogger; toolCallId?: string; [key: string]: any } }
+  ): Promise<z.infer<typeof codeInterpreterToolOutputSchema>> {
+    const { context: toolContext } = executionContext; 
+    const { code, timeout } = toolContext.input;
+    const config = toolContext.config;
 
-    logger.info(`[${toolCallId}] Executing Code Interpreter Tool`, { code: input.code.substring(0, 100) + (input.code.length > 100 ? '...' : '') });
+    const currentLogger = executeOptions?.runtime?.logger || toolLogger;
+    const toolCallId = executeOptions?.runtime?.toolCallId || 'code-interpreter-execution';
+    const abortSignal = executeOptions?.abortSignal;
+
+    currentLogger.info(`[${toolCallId}] Executing Code Interpreter Tool`, { code: code.substring(0, 100) + (code.length > 100 ? '...' : '') });
 
     let sandbox: Sandbox | undefined;
     try {
-      if (config?.e2bApiKey) {
-        logger.debug(`[${toolCallId}] Using e2bApiKey from tool config.`);
+      const apiKey = config?.e2bApiKey || process.env.E2B_API_KEY;
+      if (!apiKey) {
+        currentLogger.error(`[${toolCallId}] E2B API key is missing. Provide it in tool config or E2B_API_KEY env var.`);
+        return {
+          stdout: '',
+          stderr: 'E2B API Key is missing',
+          error: { name: 'ConfigurationError', message: 'E2B API key is missing.', stacktrace: '' },
+          result: null,
+        };
       }
       
+      currentLogger.debug(`[${toolCallId}] Creating E2B Sandbox.`);
       sandbox = await Sandbox.create({
-        apiKey: config?.e2bApiKey || process.env.E2B_API_KEY,
+        apiKey: apiKey,
         template: 'base',
-        onStdout: (data: any) => logger.debug(`[${toolCallId}] Sandbox stdout: ${data}`),
-        onStderr: (data: any) => logger.debug(`[${toolCallId}] Sandbox stderr: ${data}`),
       });
 
       if (abortSignal?.aborted) {
-        logger.info(`[${toolCallId}] Execution aborted before starting sandbox operation.`);
+        currentLogger.info(`[${toolCallId}] Execution aborted before starting sandbox operation.`);
         return {
             stdout: '',
             stderr: '',
             error: { name: 'AbortError', message: 'Execution aborted by signal', stacktrace: '' },
             result: null,
-        } as z.infer<typeof codeInterpreterToolOutputSchema>;
+        };
       }
 
-      const execution = await sandbox.notebook.execCell(input.code, {
-        timeout: input.timeout,
+      currentLogger.debug(`[${toolCallId}] Executing code in sandbox cell with timeout: ${timeout}ms.`);
+      const execution = await sandbox.notebook.execCell(code, {
+        timeout,
       });
 
       if (abortSignal?.aborted) {
-        logger.info(`[${toolCallId}] Execution aborted during sandbox operation.`);
-        if (sandbox) {
-            await sandbox.close().catch((closeError: any) => logger.error(`[${toolCallId}] Error closing sandbox on abort`, { closeError }));
-        }
+        currentLogger.info(`[${toolCallId}] Execution aborted during sandbox operation.`);
         return {
             stdout: execution.logs.stdout.join('\n'),
             stderr: execution.logs.stderr.join('\n'),
             error: { name: 'AbortError', message: 'Execution aborted by signal', stacktrace: '' },
             result: null,
-        } as z.infer<typeof codeInterpreterToolOutputSchema>;
+        };
       }
 
-      await sandbox.close();
-
       if (execution.error) {
-        logger.error(`[${toolCallId}] Code execution error in sandbox`, { errorName: execution.error.name, errorMessage: execution.error.message });
+        currentLogger.error(`[${toolCallId}] Code execution error in sandbox`, { errorName: execution.error.name, errorMessage: execution.error.message });
         return {
           stdout: execution.logs.stdout.join('\n'),
           stderr: execution.logs.stderr.join('\n'),
@@ -91,31 +104,36 @@ export const codeInterpreterTool = createTool({
             stacktrace: execution.error.traceback.join('\n'),
           },
           result: null,
-        } as z.infer<typeof codeInterpreterToolOutputSchema>;
+        };
       }
 
-      logger.info(`[${toolCallId}] Code execution successful`);
+      currentLogger.info(`[${toolCallId}] Code execution successful`);
       return {
         stdout: execution.logs.stdout.join('\n'),
         stderr: execution.logs.stderr.join('\n'),
         result: execution.output,
         error: null,
-      } as z.infer<typeof codeInterpreterToolOutputSchema>;
+      };
 
     } catch (error: any) {
-      logger.error(`[${toolCallId}] Failed to execute code interpreter tool`, { errorName: error.name, errorMessage: error.message });
-      if (sandbox) {
-        await sandbox.close().catch((closeError: any) => logger.error(`[${toolCallId}] Error closing sandbox in catch block`, { closeError }));
-      }
+      currentLogger.error(`[${toolCallId}] Failed to execute code interpreter tool`, { errorName: error.name, errorMessage: error.message, stack: error.stack });
       return {
         stdout: '',
-        stderr: '',
+        stderr: error.message || 'An unexpected error occurred during tool execution.',
         error: {
           name: error.name || 'ToolExecutionError',
           message: error.message || 'An unexpected error occurred.',
           stacktrace: error.stack || '',
         },
         result: null,
-      } as z.infer<typeof codeInterpreterToolOutputSchema>;
+      };
+    } finally {
+      if (sandbox) {
+        currentLogger.debug(`[${toolCallId}] Closing E2B Sandbox.`);
+        await sandbox.close().catch((closeError: any) => 
+          currentLogger.error(`[${toolCallId}] Error closing sandbox: ${closeError.message}`, { error: closeError })
+        );
+      }
     }
-  },});
+  },
+});
