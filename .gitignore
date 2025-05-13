@@ -1,5 +1,6 @@
 output.txt 
-node_modules 
+node_modules
+package-lock.json
 dist 
 .mastra 
 .env.development 

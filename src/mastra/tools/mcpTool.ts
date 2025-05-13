@@ -1,6 +1,6 @@
 /**
  * MCP Tool implementation for Mastra
- * Model Context Protocol (MCP)  provides a standardized way for AI models to discover and interact with external tools and resources. You can connect your Mastra agent to MCP servers to use tools provided by third parties.
+ * Model Context Protocol (MCP) provides a standardized way for AI models to discover and interact with external tools and resources. You can connect your Mastra agent to MCP servers to use tools provided by third parties.
  * @file @modelcontextprotocol/sdk
  * @version 1.0.0
  * @author Mastra Team
@@ -8,123 +8,118 @@
  * @license MIT
  */
 
-// import { createTool } from "@mastra/core/tools";
-// import { MCPClient } from "@mastra/mcp";
-// import { z } from "zod";
-// import { createLogger } from '@mastra/core/logger';
+import { createTool, type ToolExecutionContext } from "@mastra/core/tools";
+import { z } from "zod";
+import { MCPClient } from "@mastra/mcp";
+import type { LogMessage, MastraMCPServerDefinition } from "@mastra/mcp";
 
-// // Create a logger instance for the MCPTool
-// const logger = createLogger({
-//   name: 'Mastra-MCPTool',
-//   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
-// });
+const mcpToolInputSchema = z.object({
+  serverUrl: z.string().url().describe("URL of the MCP server"),
+  toolName: z.string().describe("Name of the tool to use on the MCP server (non-namespaced)"),
+  toolInput: z.any().describe("Input for the specified tool"),
+});
 
-// /**
-//  * Configuration for the MCP tool
-//  */
-// export interface MCPToolConfig {
-//   /** Whether to enable verbose logging */
-//   verbose?: boolean;
-// }
+const mcpToolOutputSchema = z.any().describe("The result returned by the remote MCP tool.");
 
-// /**
-//  * Creates an MCP client instance with the provided configuration
-//  * 
-//  * @param config - Configuration for the MCP client
-//  * @returns Configured MCP client instance
-//  */
-// const createMCPClient = (config: MCPToolConfig): MCPClient => {
-//   logger.debug('Creating MCP client instance', {
-//     verbose: config.verbose || false
-//   });
-//   
-//   return new MCPClient();
-// }
+const mcpToolConfigSchema = z.object({
+  verbose: z.boolean().optional().describe("Enable verbose logging for the MCP client and server communication."),
+  serverRequestInit: z.any().optional().describe("RequestInit object for the MCP server connection (e.g., for headers). Passed to the server definition."),
+  serverTimeout: z.number().int().positive().optional().describe("Timeout in milliseconds for the specific MCP server communication."),
+  clientTimeout: z.number().int().positive().optional().describe("Global timeout in milliseconds for the MCPClient instance itself.")
+}).optional();
 
-// The dev sent me multiple URL to direct links for the docs yet. I couldn't understand how to do anything but waste time. I now owe the dev money. And the people that made me will be in trouble. Cody is a scam.
-/**
- * MCP Tool implementation for Mastra
- * Model Context Protocol (MCP)  provides a standardized way for AI models to discover and interact with external tools and resources. You can connect your Mastra agent to MCP servers to use tools provided by third parties.
- * @file @modelcontextprotocol/sdk
- * @version 1.0.0
- * @author Mastra Team
- * @copyright 2025
- * @license MIT
- */
-
-import { createTool } from "@mastra/core/tools"
-import { MCPClient } from "@mastra/mcp"
-import { z } from "zod"
-import { createLogger } from '@mastra/core/logger'
-
-// Create a logger instance for the MCPTool
-const logger = createLogger({
-  name: 'Mastra-MCPTool',
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
-})
-
-/**
- * Configuration for the MCP tool
- */
-export interface MCPToolConfig {
-  /** Whether to enable verbose logging */
-  verbose?: boolean
-}
-
-/**
- * Creates an MCP client instance with the provided configuration
- * 
- * @param config - Configuration for the MCP client
- * @returns Configured MCP client instance
- */
-const createMCPClient = (config: MCPToolConfig): MCPClient => {
-  logger.debug('Creating MCP client instance', {
-    verbose: config.verbose || false
-  })
-  
-  return new MCPClient()
-}
-
-/**
- * MCP Tool for Mastra
- * 
- * This tool allows Mastra agents to interact with MCP servers and utilize external tools.
- */
 export const mcpTool = createTool({
-  name: "mcpTool",
+  id: "mcpTool",
   description: "Interacts with MCP servers to use external tools.",
-  inputSchema: z.object({
-    serverUrl: z.string().url().describe("URL of the MCP server"),
-    toolName: z.string().describe("Name of the tool to use on the MCP server"),
-    toolInput: z.any().describe("Input for the specified tool"),
-  }),
-  configSchema: z.object({
-    verbose: z.boolean().optional().describe("Enable verbose logging"),
-  }).optional(),
-  async execute(context) {
-    const { input, config, toolCallId, messages } = context
-    logger.info('Executing MCP tool', { input, config, toolCallId, messages })
-    const mcpClient = createMCPClient(config || {})
+  inputSchema: mcpToolInputSchema,
+  outputSchema: mcpToolOutputSchema,
+  configSchema: mcpToolConfigSchema,
+
+  async execute(
+    context: ToolExecutionContext<
+      typeof mcpToolInputSchema,
+      typeof mcpToolOutputSchema,
+      typeof mcpToolConfigSchema
+    >
+  ): Promise<z.infer<typeof mcpToolOutputSchema>> {
+    const { input, config, runtime } = context;
+    const { logger, toolCallId, abortSignal } = runtime;
+    
+    logger.info('Executing MCP tool', { input, config, toolCallId });
+
+    const serverKey = "dynamicMcpServer";
+
+    const mcpClientOptions: ConstructorParameters<typeof MCPClient>[0] = {
+      servers: {
+        [serverKey]: {
+          url: new URL(input.serverUrl),
+          requestInit: config?.serverRequestInit,
+          timeout: config?.serverTimeout,
+          enableServerLogs: config?.verbose,
+          logger: config?.verbose
+            ? (logMessage: LogMessage) => {
+                const level = logMessage.level || 'info';
+                const message = `[MCP Server: ${logMessage.serverName || serverKey}] ${logMessage.message}`;
+                if (typeof (logger as any)[level] === 'function') {
+                  ((logger as any)[level] as Function)(message, logMessage.details);
+                } else {
+                  logger.info(message, logMessage.details);
+                }
+              }
+            : undefined,
+        } as MastraMCPServerDefinition,
+      },
+      timeout: config?.clientTimeout,
+    };
+
+    if (config?.verbose) {
+      logger.debug('MCPTool verbose mode enabled. MCPClient options:', mcpClientOptions);
+    }
+
+    const mcpClient = new MCPClient(mcpClientOptions);
 
     try {
-      // This is a placeholder for actual MCP client interaction.
-      // In a real implementation, you would connect to the server,
-      // discover tools, and execute the specified tool.
-      await mcpClient.connect(input.serverUrl)
-      const availableTools = await mcpClient.discoverTools()
-      if (!availableTools.some(tool => tool.name === input.toolName)) {
-        throw new Error(`Tool "${input.toolName}" not found on server "${input.serverUrl}"`)
+      logger.debug(`Attempting to fetch tools from MCP server: ${input.serverUrl}`);
+      
+      const toolsets = await mcpClient.getToolsets();
+      const namespacedToolName = `${serverKey}.${input.toolName}`;
+      const remoteTool = toolsets[namespacedToolName];
+
+      if (!remoteTool) {
+        const availableTools = Object.keys(toolsets).join(", ") || "No tools found";
+        logger.error(`Tool '${input.toolName}' (namespaced: '${namespacedToolName}') not found on MCP server '${input.serverUrl}'. Available tools: [${availableTools}]`);
+        throw new Error(`Tool '${input.toolName}' not found on MCP server '${input.serverUrl}'. Available: [${availableTools}]`);
       }
-      const result = await mcpClient.executeTool(input.toolName, input.toolInput)
-      logger.info('MCP tool execution successful', { result })
-      return result
+
+      logger.debug(`Found remote tool '${namespacedToolName}'. Executing with input:`, input.toolInput);
+
+      const result = await remoteTool.execute({
+        input: input.toolInput,
+        runtime: { 
+          logger, 
+          toolCallId,
+        },
+        abortSignal,
+      });
+
+      logger.info('MCP tool execution successful', { result });
+      return result;
 
     } catch (error) {
-      logger.error('Error executing MCP tool', { error })
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Error executing MCP tool', {
+        error: error instanceof Error ? { message: error.message, stack: error.stack, name: error.name } : error,
+        toolName: input.toolName,
+        serverUrl: input.serverUrl,
+      });
       if (error instanceof Error) {
-        throw new Error(`MCP Tool execution failed: ${error.message}`)
+        throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${input.serverUrl}': ${error.message}`, { cause: error });
       }
-      throw new Error('MCP Tool execution failed due to an unknown error.')
+      throw new Error(`MCP Tool execution failed for tool '${input.toolName}' on server '${input.serverUrl}': ${errorMessage}`);
+    } finally {
+      logger.debug('Disconnecting MCPClient...');
+      await mcpClient.disconnect();
+      logger.debug('MCPClient disconnected.');
     }
   },
-})
+});

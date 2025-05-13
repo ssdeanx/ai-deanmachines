@@ -1,3 +1,5 @@
+import { RAGState } from './../knowledge/types';
+import { Document } from './../knowledge/vectorStore';
 /**
  * Graph RAG Tool implementation for Mastra
  * 
@@ -8,12 +10,10 @@
  * @license MIT
  */
 
-import { createTool } from "@mastra/core/tools";
+import { createTool, ToolExecutionContext } from '@mastra/core/tools';
 import { z } from "zod";
 import { createLogger } from '@mastra/core/logger';
-import { Neo4jGraphStore } from "@mastra/knowledge/neo4j";
-import { VectorStore } from "@mastra/knowledge/vector";
-import { EmbeddingModel } from "@mastra/embeddings";
+import { MDocument, createDocumentChunkerTool, createVectorQueryTool, defaultVectorQueryDescription } from '@mastra/rag';
 
 // Create a logger instance for the GraphRAGTool
 const logger = createLogger({
@@ -77,8 +77,7 @@ export const createGraphRAGTool = (config: GraphRAGToolConfig) => {
   } = config;
   
   return createTool({
-    id: "graph-rag",
-    name: "retrieveKnowledge",
+    id: "graph-rag-query",
     description: "Retrieves knowledge using graph-based RAG with both semantic and structural relevance",
     inputSchema: z.object({
       /**
