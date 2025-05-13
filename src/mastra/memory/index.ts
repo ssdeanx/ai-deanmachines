@@ -198,11 +198,19 @@ export async function createAdvancedMemory(options: Partial<EnhancedMemoryConfig
  */
 function createLargeContextProcessors(): MemoryProcessor[] {
   return [
-    new HighVolumeContextProcessor(),
+    new ContextualSummarizer(),
     new TokenLimiter(),
     new ToolCallFilter(),
-    new SemanticEmbeddingProcessor(),
-    new SemanticClusteringProcessor()
+    new PriorityRanker(),
+    new DuplicateDetector(),
+    new TemporalProcessor(),
+    new EntityExtractor(),
+    new SentimentAnalyzer(),
+    new ContextualEnhancer(),
+    new MessageTransformer(),
+    new StreamFilter(),
+    new StreamObjectProcessor(),
+    new StreamAggregator(),
   ];
 }
 
