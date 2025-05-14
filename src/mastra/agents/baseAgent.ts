@@ -18,7 +18,7 @@ import {
   generateObject, 
   Message
 } from 'ai';
-import { Memory } from '../memory';
+import { Memory, createMemory, createAdvancedMemory, sharedMemory, initThreadManager, ThreadManager, ThreadInfo } from '../memory';
 import { DefinedAgentConfig } from '../config/agentConfig';
 import { getModelInstance } from '../config/models';
 import { getTracer, recordLLMMetrics } from '../observability/telemetry';
@@ -147,7 +147,11 @@ export class BaseAgent {
     this.topP = config.agentLLMConfig.topP ?? config.topP;
     this.topK = config.topK;
 
-    if (config.memory) this.memory = new Memory(config.memory);
+    if (config.memory) {
+      this.memory = config.memory instanceof Memory ? config.memory : new Memory(config.memory);
+    } else {
+      this.memory = sharedMemory;
+    }
     if (config.tools) this.tools = config.tools;
     
     // FUTURE_INITIALIZATION: Initialize vector database if configured
@@ -875,5 +879,14 @@ export class BaseAgent {
 
     logger.info(`Reset agent ${this.name}`);
     return this;
+  }
+
+  /**
+   * Exposes thread manager for advanced thread operations
+   * 
+   * @returns ThreadManager instance
+   */
+  public getThreadManager(): ThreadManager {
+    return initThreadManager;
   }
 }

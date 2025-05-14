@@ -1,15 +1,21 @@
 /**
- * Database configuration for memory persistence using a custom LibSQL adapter.
- *
- * This module sets up the custom LibSQL adapter for Mastra memory persistence,
- * allowing agent conversations and context to be stored reliably.
+ * Memory management module for Mastra AI agents.
+ * 
+ * This module serves as the central memory system for Mastra AI, providing:
+ * - Persistent storage for conversation history
+ * - Vector-based semantic search for contextual recall
+ * - Thread management for organizing conversations
+ * - Memory processing pipeline for context optimization
+ * - Telemetry integration for monitoring memory operations
+ * 
+ * The memory system is designed to be used with the agent system in `@mastra/core`
+ * and integrates with the observability stack for performance monitoring.
  */
-
 import { LibSQLStore, LibSQLVector } from '@mastra/libsql';
 import { Memory } from '@mastra/memory';
 import type { MastraStorage, MastraVector, MemoryProcessor } from '@mastra/core';
 import { createLogger } from '@mastra/core/logger';
-import { MemoryConfig, EnhancedMemoryConfig, ThreadInfo } from './types';
+import { MemoryConfig, EnhancedMemoryConfig, ThreadInfo, ThreadManager } from './types';
 import { getTracer } from '../observability/telemetry';
 import { getLangfuseClient, trackSpan as langfuseTrackSpan, MastraSpanOptions } from '../observability/langfuse';
 import { Span as OpenTelemetrySpan, SpanStatusCode } from '@opentelemetry/api';
@@ -33,10 +39,27 @@ import {
   StreamAggregator,
   CommonGroupings 
 } from './processors';
+import { ThreadManagerImpl } from './threadManager';
 
+/** 
+ * Logger instance for memory-related operations
+ * Uses the centralized logging system from `@mastra/core/logger`
+ */
 const logger = createLogger({ name: 'database', level: 'info' });
 
-// Default memory configuration that works well for most agents
+/**
+ * Default memory configuration optimized for most agent use cases.
+ * 
+ * Key configuration aspects:
+ * - Retains last 250 messages for immediate context
+ * - Semantic recall fetches 8 most relevant messages
+ * - Includes context window of 7 messages before and 2 after each match
+ * - Enables working memory with text-stream processing
+ * - Automatically generates thread titles
+ * 
+ * This configuration balances performance and context quality for most
+ * conversational AI applications. Adjust based on specific agent needs.
+ */
 const defaultMemoryConfig: EnhancedMemoryConfig = {
   provider: 'local',
   lastMessages: 250,
@@ -57,7 +80,16 @@ const defaultMemoryConfig: EnhancedMemoryConfig = {
     }
   }
 };
-// Enable lazy loading for Langfuse
+
+/**
+ * Lazily loads the Langfuse client for telemetry.
+ * 
+ * This approach prevents initialization errors if Langfuse is not configured,
+ * making the memory system more resilient to missing observability components.
+ * 
+ * @returns The Langfuse client factory function or null if unavailable
+ * @see ../observability/langfuse.ts for implementation details
+ */
 async function getLangfuse() {
   try {
     const { getLangfuseClient } = await import("../observability/langfuse");
@@ -67,22 +99,65 @@ async function getLangfuse() {
     return null;
   }
 }
-// Create LibSQL storage and vector instances with optimized configuration
+
+/**
+ * Primary LibSQL storage instance for persisting memory data.
+ * 
+ * This database stores:
+ * - Message history
+ * - Thread metadata
+ * - Agent state information
+ * - Working memory content
+ * 
+ * Configure with DATABASE_URL and DATABASE_KEY environment variables
+ * or it will default to local file storage in the .mastra directory.
+ */
 export const storage = new LibSQLStore({
   url: process.env.DATABASE_URL || 'file:.mastra/mastra.db',
   authToken: process.env.DATABASE_KEY,
 });
 
+// Add init method if not present for backward compatibility
 if (typeof (storage as LibSQLStore).init !== 'function') {
   (storage as LibSQLStore).init = async () => { };
 }
 
+/**
+ * Vector database instance for semantic search capabilities.
+ * 
+ * Stores vector embeddings of messages to enable:
+ * - Semantic similarity search
+ * - Contextual recall based on query relevance
+ * - Knowledge retrieval across conversation history
+ * 
+ * Uses the same connection details as the primary storage
+ * but maintains a separate database file for vector operations.
+ */
 export const vector = new LibSQLVector({
   connectionUrl: process.env.DATABASE_URL || 'file:.mastra/mastra-vector.db',
   authToken: process.env.DATABASE_KEY,
 });
 
-// Function to create a configured Memory instance with telemetry
+/**
+ * Creates a standard Memory instance with basic configuration and telemetry.
+ * 
+ * Use this function when you need a simple memory instance without advanced
+ * processing capabilities. For more complex scenarios, use `createAdvancedMemory()`.
+ * 
+ * @param options - Configuration options to override defaults
+ * @returns Configured Memory instance ready for use with agents
+ * @example
+ * 
+ * // Create memory with default settings
+ * const memory = await createMemory();
+ * 
+ * // Create memory with custom configuration
+ * const customMemory = await createMemory({
+ *   lastMessages: 100,
+ *   provider: 'local'
+ * });
+ * 
+ */
 export async function createMemory(options: Partial<MemoryConfig> = defaultMemoryConfig): Promise<Memory> {
   const config = { ...defaultMemoryConfig, ...options };
   const tracer = getTracer('memory-module.createMemory');
@@ -111,7 +186,15 @@ export async function createMemory(options: Partial<MemoryConfig> = defaultMemor
     }
   });}
 
-// Export shared memory instance with high token limit support
+/**
+ * Shared memory instance with high token limit support.
+ * 
+ * This pre-configured instance is used across the application for consistent
+ * memory access. It includes all advanced processors for optimal context
+ * management and is the recommended memory instance for most use cases.
+ * 
+ * The shared instance is automatically initialized and ready to use.
+ */
 export const sharedMemory = new Memory({
   storage: storage as unknown as MastraStorage,
   vector: vector as unknown as MastraVector,
@@ -119,7 +202,38 @@ export const sharedMemory = new Memory({
   processors: createLargeContextProcessors()
 });
 
-// Ensure threadManager initializes only after sharedMemory is ready
+/** 
+ * Thread manager instance for handling conversation threads
+ * 
+ * Implemented by ThreadManagerImpl which provides methods for:
+ * - Creating new conversation threads
+ * - Retrieving existing threads
+ * - Managing thread metadata
+ * 
+ * @see ./threadManager.ts for implementation details
+ */
+const threadManagerInstance: ThreadManager = new ThreadManagerImpl(sharedMemory);
+
+/**
+ * Initializes the thread manager and creates a default thread.
+ * 
+ * This self-executing async function ensures:
+ * 1. The shared memory is fully initialized
+ * 2. A default thread named 'mastra_memory' exists
+ * 3. Telemetry is configured for thread operations
+ * 
+ * The returned promise resolves to the initialized ThreadManager instance.
+ * Wait for this promise to resolve before performing thread operations.
+ * 
+ * @example
+ * 
+ * // Get the initialized thread manager
+ * const threadManager = await initThreadManager;
+ * 
+ * // Create a new thread
+ * const thread = await threadManager.getOrCreateThread('my-conversation');
+ * 
+ */
 export const initThreadManager = (async () => {
   const span = createTracedSpan('threadManager.init', 'memory-module');
   
@@ -131,13 +245,15 @@ export const initThreadManager = (async () => {
     }
     let defaultThread: ThreadInfo | undefined;
     try {
-      defaultThread = await threadManager.getOrCreateThread('mastra_memory');
+      defaultThread = await threadManagerInstance.getOrCreateThread('mastra_memory');
     } catch (err) {
       logger.error('Failed to create default thread in threadManager:', { error: err instanceof Error ? err.message : String(err) });
     }
-    const langfuseInstance = (await getLangfuse());
+    const langfuseClientFactory = await getLangfuse();
+    const langfuseInstance = langfuseClientFactory ? langfuseClientFactory() : null;
     if (langfuseInstance) {
-      langfuseInstance.trace('initThreadManager', {
+      langfuseInstance.trace({
+        name: 'initThreadManager',
         metadata: {
           ...(defaultThread?.usage_details ? { usage_details: defaultThread.usage_details } : {}),
           ...(defaultThread?.cost_details ? { cost_details: defaultThread.cost_details } : {})
@@ -145,21 +261,48 @@ export const initThreadManager = (async () => {
       });
     }
     span?.end();
-    return threadManager;
+    return threadManagerInstance;
   } catch (error) {
     span?.recordException?.(error instanceof Error ? error : String(error));
     span?.end();
     throw error;
   }
 
-})();export type { Memory };
+})();
+
+export type { Memory };
 export type { ThreadManager, ThreadInfo };
 
 /**
- * Creates a configured Memory instance with advanced processor options
+ * Creates a Memory instance with advanced processor capabilities.
  * 
- * @param options Memory configuration options
- * @returns Configured Memory instance
+ * This function configures a memory instance with the full suite of memory
+ * processors, enabling sophisticated context management for complex agents:
+ * - Context summarization for long conversations
+ * - Token limiting for LLM context windows
+ * - Tool call filtering to focus on relevant actions
+ * - Priority ranking of important information
+ * - Duplicate detection to reduce redundancy
+ * - Temporal processing for time-aware context
+ * - Entity extraction for knowledge graphs
+ * - Sentiment analysis for emotional context
+ * 
+ * @param options - Configuration options to override defaults
+ * @returns Advanced Memory instance with enhanced processors
+ * @example
+ * 
+ * // Create advanced memory with custom token limits
+ * const advancedMemory = await createAdvancedMemory({
+ *   workingMemory: {
+ *     enabled: true,
+ *     type: "knowledge-graph"
+ *   },
+ *   processors: [
+ *     new CustomProcessor(),
+ *     ...createLargeContextProcessors()
+ *   ]
+ * });
+ * 
  */
 export async function createAdvancedMemory(options: Partial<EnhancedMemoryConfig> = defaultMemoryConfig): Promise<Memory> {
   const config = { ...defaultMemoryConfig, ...options };
@@ -192,9 +335,20 @@ export async function createAdvancedMemory(options: Partial<EnhancedMemoryConfig
   });}
 
 /**
- * Creates a chain of memory processors optimized for handling large context windows up to 1M tokens
+ * Creates a chain of memory processors optimized for handling large context windows.
  * 
- * @returns Array of memory processors configured for high-volume context
+ * This processor chain is designed to:
+ * - Efficiently manage context up to 1M tokens
+ * - Filter irrelevant or redundant information
+ * - Prioritize important context elements
+ * - Extract and enhance semantic understanding
+ * - Process streaming data for real-time applications
+ * 
+ * The processors are executed in sequence, with each processor potentially
+ * modifying the context before passing it to the next processor.
+ * 
+ * @returns Array of configured memory processors in execution order
+ * @see ./processors/ directory for individual processor implementations
  */
 function createLargeContextProcessors(): MemoryProcessor[] {
   return [
@@ -215,10 +369,15 @@ function createLargeContextProcessors(): MemoryProcessor[] {
 }
 
 /**
- * Creates an OpenTelemetry span.
- * @param tracerName Name for the tracer.
- * @param spanName Name for the span.
- * @returns An OpenTelemetry Span.
+ * Creates an OpenTelemetry span for tracing operations.
+ * 
+ * This utility function simplifies the creation of tracing spans
+ * for consistent observability across the memory module.
+ * 
+ * @param tracerName - Name for the tracer
+ * @param spanName - Name for the span
+ * @returns An OpenTelemetry Span for tracing the operation
+ * @see ../observability/telemetry.ts for the tracer implementation
  */
 function createTracedSpan(tracerName: string, spanName: string): OpenTelemetrySpan {
   const tracer = getTracer(tracerName);
@@ -226,32 +385,42 @@ function createTracedSpan(tracerName: string, spanName: string): OpenTelemetrySp
 }
 
 /**
- * Standardized error handling for async operations
- * @param operation Name of the operation for logging
- * @param span Optional tracing span (OpenTelemetrySpan)
- * @param throwError Whether to rethrow the error (default: true)
+ * Standardized error handling for async operations with telemetry support.
+ * 
+ * This higher-order function wraps async operations with consistent error
+ * handling, logging, and telemetry. It's designed to be used throughout
+ * the memory module for uniform error management.
+ * 
+ * @param operation - Name of the operation for logging
+ * @param span - Optional tracing span
+ * @param throwError - Whether to rethrow the error
  * @returns Function that wraps try/catch with standard error handling
+ * @example
+ * ```typescript
+ * // Basic usage
+ * const safeOperation = withErrorHandling('fetchMemory')(async () => {
+ *   return await memory.getMessages({ threadId });
+ * });
+ * 
+ * // With custom span
+ * const span = createTracedSpan('memory', 'customOperation');
+ * const safeOperation = withErrorHandling('fetchMemory', span)(async () => {
+ *   return await memory.getMessages({ threadId });
+ * });
+ * ```
  */
-export function withErrorHandling<T>(
-  operation: string,
-  span?: OpenTelemetrySpan,
-  throwError: boolean = true
-) {
-  return async function<A extends any[], R>(fn: (...args: A) => Promise<R>, ...args: A): Promise<R> {
+function withErrorHandling(operation: string, span?: OpenTelemetrySpan, throwError = true) {
+  return async (fn: () => Promise<any>) => {
     try {
-      const result = await fn(...args);
-      span?.setStatus({ code: SpanStatusCode.OK });
-      return result;
+      return await fn();
     } catch (error) {
-      logger.error(`Error during ${operation}`, { err: error, operation });
-      span?.recordException(error as Error);
-      span?.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
+      logger.error(`Error during ${operation}: ${error instanceof Error ? error.message : String(error)}`);
+      span?.recordException?.(error instanceof Error ? error : String(error));
       if (throwError) {
         throw error;
       }
-      return undefined as unknown as R;
-      } finally {
-        span?.end();
-      }
-    };
-  }
+    }
+  };
+}
+
+export { withErrorHandling };
